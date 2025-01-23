@@ -33,8 +33,7 @@ def load_attrs(attrs_path, model_ID):
 
 def load_model_instance(model_path,
                         attrs,
-                        model_type,
-                        model_ID):
+                        model_type):
     """
     Args:
         model_path (str): Path to the saved model's state_dict file.
@@ -44,9 +43,6 @@ def load_model_instance(model_path,
     Returns:
         BaseModel: A model instance with the loaded weights and attributes.
     """
-
-    model_path = os.path.join(model_path, f'{model_type}{model_ID}.pth')
-
     # Initialize the model using its attributes
     input_size = attrs['input_size']
     output_size = attrs['output_size']
