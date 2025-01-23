@@ -108,7 +108,7 @@ def evaluate_model(test_features,
 
 
     logger.info(f"Loading model from {model_path}")
-    model_instance = load_model_instance(model_path, attrs, model_type, model_ID)
+    model_instance = load_model_instance(model_path, attrs, model_type)
 
     logger.info("Running predictions on test data")
     model_instance.eval()
