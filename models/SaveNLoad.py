@@ -3,6 +3,25 @@ from models.NN_Base import NN_Topology
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
 import os
 import pickle as pk
+import logging
+
+# Set up logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
+
+def save_variable_with_pickle(variable, variable_name, variable_id, file_path):
+    # Ensure the directory exists
+    if not os.path.exists(file_path):
+        os.makedirs(file_path)
+
+    file_name = f"{variable_name}{variable_id}.pk"
+    file_path = os.path.join(file_path, file_name)
+
+    with open(file_path, "wb") as f:
+        pk.dump(variable, f)
+        logger.info(f"Variable saved as '{file_path}'.")
+
 
 
 def load_attrs(attrs_path, model_ID):
