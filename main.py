@@ -13,7 +13,15 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 
-def run_model(path_to_data, layers, model_ID, nprocs, model_type, file_details, path_to_save='./data_out'):
+def run_model(path_to_data,
+              layers,
+              model_ID,
+              nprocs,
+              model_type,
+              file_details,
+              path_to_save='./data_out',
+              plot=False):
+
     logger.info(f'Running model with {layers} layers and ID {model_ID}')
 
     derivative = 'Laplace'
@@ -47,25 +55,29 @@ def run_model(path_to_data, layers, model_ID, nprocs, model_type, file_details, 
                    test_features, test_labels, polynomial),
              nprocs=nprocs)
 
-    # Transforms test dataset to torch tensor, so it can be passed through ANN
+    attrs = load_attrs(path_to_data, model_ID)
+    model_path = os.path.join(path_to_save, f'{model_type}{model_ID}.pth')
+    model_instance = load_model_instance(model_path, attrs, model_type)
 
-    pred_labels = ann.predict(test_features)
+    pred_labels = model_instance(test_features)
+
+    if plot:
+        scaled_actual_l, scaled_pred_l, scaled_feat = rescale_h(test_labels, pred_labels, test_features, h)
 
 
-    scaled_actual_l, scaled_pred_l, scaled_feat = rescale_h(test_labels, pred_labels, test_features, h)
+        test_neigh_coor = d_2_c(coor, test_index, scaled_feat)
 
 
-    test_neigh_coor = d_2_c(coor, test_index, scaled_feat)
+        plot_node_prediction_error(
+            pred_l=scaled_pred_l,
+            actual_l=scaled_actual_l,
+            coor_subset=test_neigh_coor,
+            node='random',
+            size=80,
+            save_path='{plot_type}.png'
+        )
 
-
-    plot_node_prediction_error(
-        pred_l=scaled_pred_l,
-        actual_l=scaled_actual_l,
-        coor_subset=test_neigh_coor,
-        node='random',
-        size=80,
-        save_path='{plot_type}.png'
-    )
+    logger.info('Model run complete')
 
 
 
