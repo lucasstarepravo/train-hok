@@ -1,6 +1,6 @@
-# Torch_SS_Surr_ddp
+# Torch_HK_Surr_ddp
 
-Torch_SS_Surr_ddp is a PyTorch-based framework for training surrogate models for the high-order kernel in high-order mesh-free methods. This repository supports training three types of models: MLP, PINN, and ResMLP. 
+Torch_SS_Surr_ddp is a PyTorch-based framework for training surrogate models for the high-order kernel in high-order mesh-free methods. This repository supports training three types of models: MLP, PINN, and ResMLP. 'HK' stands for high-order kernel and 'Surr' for surrogate
 
 ## Table of Contents
 
