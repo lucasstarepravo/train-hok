@@ -42,7 +42,7 @@ def run_model(path_to_data,
     ann = BaseModel(hidden_layers=layers,
                     optimizer='adam',
                     loss_function='MSE',
-                    epochs=100,
+                    epochs=5,
                     batch_size=128,
                     train_f=train_features,
                     train_l=train_labels)
@@ -55,7 +55,7 @@ def run_model(path_to_data,
                    test_features, test_labels, polynomial),
              nprocs=nprocs)
 
-    attrs = load_attrs(path_to_data, model_ID)
+    attrs = load_attrs(path_to_save, model_ID)
     model_path = os.path.join(path_to_save, f'{model_type}{model_ID}.pth')
     model_instance = load_model_instance(model_path, attrs, model_type)
 
@@ -84,7 +84,7 @@ def run_model(path_to_data,
 if __name__=='__main__':
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
-    run_model('/mnt/iusers01/mace01/w32040lg/mfree_surr/data/Order_2/Noise_0.3/Data2',
+    run_model('/mnt/iusers01/mace01/w32040lg/mfree_surr/data',
               layers=7 * [64],
               model_ID='777',
               nprocs=2,
