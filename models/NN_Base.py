@@ -190,7 +190,7 @@ class BaseModel:
                       f"Validation Loss: {val_loss:.4e}, Time: {epoch_time:.2f}s")
 
                 # Checkpoint to save model while training or if on last epoch
-                if epoch % checkpoint_interval == 0 or epoch == self.epochs - 1:
+                if (epoch+1) % checkpoint_interval == 0 or epoch == self.epochs - 1:
                     from data_processing.postprocessing import evaluate_model
                     self.save_checkpoint(path_to_save, model_type, model_ID, model_ddp)
                     evaluate_model(test_f, test_l, polynomial, model_ID, path_to_save, model_type)
