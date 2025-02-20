@@ -101,8 +101,8 @@ def evaluate_model(test_features,
     """
 
     # Load attributes and evaluate model
-    attrs_path = os.path.join(path_to_save, f'attrs{model_ID}.pk')
-    model_path = os.path.join(path_to_save, f'{model_type}{model_ID}.pth')
+    attrs_path = os.path.join(path_to_save, f'checkpoint_attrs{model_ID}.pk')
+    model_path = os.path.join(path_to_save, f'checkpoint_{model_type}{model_ID}.pth')
     with open(attrs_path, 'rb') as f:
         attrs = pk.load(f)
 
