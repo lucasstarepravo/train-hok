@@ -69,6 +69,7 @@ def monomial_power(polynomial):
 
 
 def calc_moments(neigh_xy_d, scaled_w, polynomial):
+    neigh_xy_d = neigh_xy_d.reshape(neigh_xy_d.shape[0], -1, 2)
     mon_power = monomial_power(polynomial)
     monomial = []
     for power_x, power_y in mon_power:
@@ -114,7 +115,7 @@ def evaluate_model(test_features,
     model_instance.eval()
     pred_l = model_instance(test_features)
 
-    moments_act = calc_moments(test_features.numpy(), test_labels.numpy(), polynomial=polynomial)
+    moments_act = calc_moments(test_features.numpy(), test_labels, polynomial=polynomial)
     moments_pred = calc_moments(test_features.numpy(), pred_l.detach().numpy(), polynomial=polynomial)
 
     moment_error = np.mean(abs(moments_pred - moments_act), axis=0)
