@@ -1,5 +1,6 @@
 import torch
 from models.NN_Base import NN_Topology
+from models.Transformer import Transformer_Topology
 from torch.nn.modules.utils import consume_prefix_in_state_dict_if_present
 import os
 import pickle as pk
@@ -52,9 +53,24 @@ def load_model_instance(model_path,
 
     # In the case of ResNet skip_connections must be obtained too
     if model_type.lower() == 'ann' or model_type.lower() == 'pinn':
-        model_instance = NN_Topology(input_size, hidden_layers, output_size)
+        model_instance = NN_Topology(input_size=input_size,
+                                     hidden_layers=hidden_layers,
+                                     output_size=output_size)
+
+    elif model_type.lower() == 'transformer':
+        d_model = attrs['d_model']
+        nhead = attrs['nhead']
+        num_layers = attrs['num_layers']
+        dim_feedforward = attrs['dim_feedforward']
+        model_instance = Transformer_Topology(input_size=input_size,
+                                              d_model=d_model,
+                                              nhead=nhead,
+                                              num_layers=num_layers,
+                                              dim_feedforward=dim_feedforward,
+                                              output_size=output_size)
+
     else:
-        raise ValueError('model_type must be one of "ann","pinn"')
+        raise ValueError('model_type must be one of "ann","pinn", or "transformer".')
 
     # Automatically remove the "module." prefix if it exists
     consume_prefix_in_state_dict_if_present(model_state, prefix="module.")
