@@ -3,6 +3,7 @@ from data_processing.postprocessing import *
 from Plots import *
 from models.NN_Base import BaseModel
 from models.PINN import PINN
+from models.Transformer import Transformer
 from models.SaveNLoad import *
 import pickle as pk
 import os
@@ -39,6 +40,12 @@ def run_model(path_to_data,
      coor,
      h) = preprocess_data(path_to_data, file_details, derivative, polynomial)
 
+    if model_type.lower() == 'transformer':
+        train_features = train_features.reshape(train_features.shape[0], -1, 2)
+        val_features = val_features.reshape(val_features.shape[0], -1, 2)
+        test_features = test_features.reshape(test_features.shape[0], -1, 2)
+        pass
+
     ann = BaseModel(hidden_layers=layers,
                     optimizer='adam',
                     loss_function='MSE',
@@ -46,6 +53,18 @@ def run_model(path_to_data,
                     batch_size=128,
                     train_f=train_features,
                     train_l=train_labels)
+
+    ann = Transformer(hidden_layers=layers,
+                      optimizer='adam',
+                      loss_function='MSE',
+                      epochs=5,
+                      batch_size=128,
+                      train_f=train_features,
+                      train_l=train_labels,
+                      d_model=4,
+                      nhead=2,
+                      num_layers=2,
+                      dim_feedforward=128)
 
     logger.info('Starting model training')
 
