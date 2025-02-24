@@ -220,6 +220,8 @@ class BaseModel:
 
     def calculate_loss(self, outputs, labels, inputs=None):
         """Override if specific loss behavior is required."""
+        print(f'Shape of outputs: {outputs.shape}')
+        print(f'Shape of labels: {labels.shape}')
         return self.loss_function(outputs, labels)
 
     def calculate_val_loss(self, model_ddp, proc_index, val_loader):
