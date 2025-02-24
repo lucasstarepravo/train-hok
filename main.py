@@ -47,7 +47,7 @@ def run_model(path_to_data,
 
         train_labels = train_labels.unsqueeze(-1)
         val_labels = val_labels.unsqueeze(-1)
-        test_labels = test_labels.unsqueeze(-1)
+        test_labels = np.expand_dims(test_labels, axis=-1)
         pass
 
     ann = BaseModel(hidden_layers=layers,
