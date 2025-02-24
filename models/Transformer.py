@@ -56,7 +56,7 @@ class Transformer_Topology(nn.Module):
         # Process through the transformer encoder.
         x = self.encoder(x)
 
-        # For simplicity, we use the representation of the last token.
+
         output = self.output(x)
         return output
 
@@ -120,3 +120,11 @@ class Transformer(BaseModel):
                        'num_layers': self.num_layers,
                        'dim_feedforward': self.dim_feedforward}
         super().save_checkpoint(path_to_save, model_type, model_ID, model_ddp, **extra_attrs)
+
+    def save_model(self, path_to_save, model_type, model_ID, **kwargs):
+        """Save the best model weights with additional attributes specific to Transformer."""
+        extra_attrs = {'d_model': self.d_model,
+                       'nhead': self.nhead,
+                       'num_layers': self.num_layers,
+                       'dim_feedforward': self.dim_feedforward}
+        super().save_checkpoint(path_to_save, model_type, model_ID, **extra_attrs)
