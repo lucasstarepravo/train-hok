@@ -98,6 +98,7 @@ class Transformer(BaseModel):
         self.nhead = nhead
         self.num_layers = num_layers
         self.dim_feedforward = dim_feedforward
+        self.input_size = int(train_f.shape[2])
 
         # Replace the default model with MeshFreeAttentionArchitecture.
         self.model = Transformer_Topology(
