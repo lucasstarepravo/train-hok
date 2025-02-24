@@ -31,7 +31,8 @@ class Transformer_Topology(nn.Module):
             d_model=d_model,
             nhead=nhead,
             dim_feedforward=dim_feedforward,
-            activation='gelu'
+            activation='gelu',
+            batch_first=True
         )
 
         self.embedding = nn.Linear(self.input_size, self.d_model)
@@ -52,12 +53,8 @@ class Transformer_Topology(nn.Module):
         # Project the input to d_model dimensions.
         x = self.embedding(src)  # Shape: (batch, seq_len, d_model)
 
-        # Transformer expects (seq_len, batch, d_model).
-        x = x.transpose(0, 1)
         # Process through the transformer encoder.
         x = self.encoder(x)
-        # Transpose back: (batch, seq_len, d_model).
-        x = x.transpose(0, 1)
 
         # For simplicity, we use the representation of the last token.
         output = self.output(x)
@@ -98,7 +95,8 @@ class Transformer(BaseModel):
         self.nhead = nhead
         self.num_layers = num_layers
         self.dim_feedforward = dim_feedforward
-        self.input_size = int(train_f.shape[2])
+        self.input_size = int(train_f.shape[-1])
+        self.output_size = int(train_l.shape[-1])
 
         # Replace the default model with MeshFreeAttentionArchitecture.
         self.model = Transformer_Topology(
@@ -107,7 +105,7 @@ class Transformer(BaseModel):
             nhead=nhead,
             num_layers=num_layers,
             dim_feedforward=dim_feedforward,
-            output_size=self.output_size
+            output_size=self.output_size,
         )
 
     def calculate_loss(self, outputs: Tensor, labels: Tensor, inputs: Tensor = None) -> Tensor:
