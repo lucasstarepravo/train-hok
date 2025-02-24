@@ -129,15 +129,23 @@ class BaseModel:
         # Preparing data for DDP
         # Training data
         train_tensor = TensorDataset(train_f, train_l)
-        tr_sampler = torch.utils.data.distributed.DistributedSampler(train_tensor, num_replicas=nprocs, rank=proc_index)
-        train_loader = torch.utils.data.DataLoader(train_tensor, batch_size=self.batch_size,
-                                                   sampler=tr_sampler, num_workers=4)
+        tr_sampler = torch.utils.data.distributed.DistributedSampler(train_tensor,
+                                                                     num_replicas=nprocs,
+                                                                     rank=proc_index)
+        train_loader = torch.utils.data.DataLoader(train_tensor,
+                                                   batch_size=self.batch_size,
+                                                   sampler=tr_sampler,
+                                                   num_workers=4)
 
         # Validation data
         val_tensor = TensorDataset(val_f, val_l)
-        val_sampler = torch.utils.data.distributed.DistributedSampler(val_tensor, num_replicas=nprocs, rank=proc_index)
-        val_loader = torch.utils.data.DataLoader(val_tensor, batch_size=self.batch_size,
-                                                 sampler=val_sampler, num_workers=4)
+        val_sampler = torch.utils.data.distributed.DistributedSampler(val_tensor,
+                                                                      num_replicas=nprocs,
+                                                                      rank=proc_index)
+        val_loader = torch.utils.data.DataLoader(val_tensor,
+                                                 batch_size=self.batch_size,
+                                                 sampler=val_sampler,
+                                                 num_workers=4)
 
         # Moving model to GPU and initialising DDP
         self.model = self.model.to(proc_index)
