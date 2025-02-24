@@ -115,6 +115,11 @@ def evaluate_model(test_features,
     model_instance.eval()
     pred_l = model_instance(test_features)
 
+    if model_type.lower() == 'transformer':
+        test_features = test_features.reshape(test_features.shape[0], -1)
+        test_labels = test_labels.reshape(test_labels.shape[0], -1)
+        pred_l = pred_l.reshape(pred_l.shape[0], -1)
+
     moments_act = calc_moments(test_features.numpy(), test_labels, polynomial=polynomial)
     moments_pred = calc_moments(test_features.numpy(), pred_l.detach().numpy(), polynomial=polynomial)
 
