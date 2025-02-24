@@ -58,16 +58,20 @@ def load_model_instance(model_path,
                                      output_size=output_size)
 
     elif model_type.lower() == 'transformer':
+        seq_len = attrs['seq_len']
         d_model = attrs['d_model']
         nhead = attrs['nhead']
         num_layers = attrs['num_layers']
         dim_feedforward = attrs['dim_feedforward']
         model_instance = Transformer_Topology(input_size=input_size,
+                                              seq_len=seq_len,
                                               d_model=d_model,
                                               nhead=nhead,
                                               num_layers=num_layers,
                                               dim_feedforward=dim_feedforward,
-                                              output_size=output_size)
+                                              output_size=output_size,
+                                              hidden_layers=hidden_layers
+                                              )
 
     else:
         raise ValueError('model_type must be one of "ann","pinn", or "transformer".')
