@@ -44,6 +44,10 @@ def run_model(path_to_data,
         train_features = train_features.reshape(train_features.shape[0], -1, 2)
         val_features = val_features.reshape(val_features.shape[0], -1, 2)
         test_features = test_features.reshape(test_features.shape[0], -1, 2)
+
+        train_labels = train_labels.unsqueeze(-1)
+        val_labels = val_labels.unsqueeze(-1)
+        test_labels = test_labels.unsqueeze(-1)
         pass
 
     ann = BaseModel(hidden_layers=layers,
@@ -103,10 +107,10 @@ def run_model(path_to_data,
 if __name__=='__main__':
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
-    run_model('/mnt/iusers01/mace01/w32040lg/mfree_surr/data',
+    run_model('/home/w32040lg/Shape Function Surrogate',
               layers=7 * [64],
               model_ID='777',
               nprocs=2,
-              model_type='pinn',
+              model_type='transformer',
               file_details=[(6, 0.3)],
               path_to_save='./data_out')
