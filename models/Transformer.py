@@ -1,4 +1,4 @@
-from models.NN_Base import BaseModel
+from models.NN_Base import BaseModel, NN_Topology
 from torch import Tensor
 import torch
 import torch.nn as nn
@@ -6,8 +6,8 @@ import torch.nn as nn
 
 class Transformer_Topology(nn.Module):
     def __init__(self, input_size: int, d_model: int, nhead: int,
-                 num_layers: int, dim_feedforward: int,
-                 output_size: int):
+                 num_layers: int, dim_feedforward: int, seq_len: int,
+                 output_size: int, hidden_layers=None):
         """
         Encoder-only attention architecture for mesh-free simulations.
 
@@ -21,10 +21,12 @@ class Transformer_Topology(nn.Module):
         """
         super(Transformer_Topology, self).__init__()
         self.input_size = input_size
+        self.seq_len = seq_len
         self.d_model = d_model
         self.nhead = nhead
         self.dim_feedforward = dim_feedforward
         self.output_size = output_size
+        self.hidden_layers = hidden_layers
 
         # Create a stack of transformer encoder layers.
         encoder_layer = nn.TransformerEncoderLayer(
@@ -37,7 +39,13 @@ class Transformer_Topology(nn.Module):
 
         self.embedding = nn.Linear(self.input_size, self.d_model)
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
-        self.output = nn.Linear(self.d_model, self.output_size)
+
+        if hidden_layers:
+            self.mlp = NN_Topology(input_size=self.d_model,
+                                   hidden_layers=hidden_layers,
+                                   output_size=self.output_size)
+        else:
+            self.output = nn.Linear(self.d_model, self.output_size)
 
 
     def forward(self, src: torch.Tensor) -> torch.Tensor:
@@ -56,9 +64,18 @@ class Transformer_Topology(nn.Module):
         # Process through the transformer encoder.
         x = self.encoder(x)
 
+        if self.hidden_layers:
+            # Flatten batch and sequence dimensions to apply NN_Topology token-wise.
+            B, S, D = x.shape
+            x_flat = x.reshape(B * S, D)  # shape: (B*S, d_model)
+            # Process each token with the MLP (NN_Topology).
+            x_flat = self.mlp(x_flat)  # shape: (B*S, output_size)
+            # Reshape back to (batch_size, seq_len, output_size)
+            x = x_flat.reshape(B, S, -1)
+        else:
+            x = self.output(x)
 
-        output = self.output(x)
-        return output
+        return x
 
 
 class Transformer(BaseModel):
@@ -96,17 +113,27 @@ class Transformer(BaseModel):
         self.num_layers = num_layers
         self.dim_feedforward = dim_feedforward
         self.input_size = int(train_f.shape[-1])
+        self.seq_len = int(train_f.shape[1])
         self.output_size = int(train_l.shape[-1])
+        self.hidden_layers = hidden_layers
 
-        # Replace the default model with MeshFreeAttentionArchitecture.
+        # Replace the default model with Transformer
         self.model = Transformer_Topology(
             input_size=self.input_size,
+            seq_len=self.seq_len,
             d_model=d_model,
             nhead=nhead,
             num_layers=num_layers,
             dim_feedforward=dim_feedforward,
             output_size=self.output_size,
+            hidden_layers=self.hidden_layers
         )
+
+        self.extra_attrs = {'d_model': self.d_model,
+                            'seq_len': self.seq_len,
+                            'nhead': self.nhead,
+                            'num_layers': self.num_layers,
+                            'dim_feedforward': self.dim_feedforward}
 
     def calculate_loss(self, outputs: Tensor, labels: Tensor, inputs: Tensor = None) -> Tensor:
         """
@@ -115,16 +142,8 @@ class Transformer(BaseModel):
         return self.loss_function(outputs, labels)
 
     def save_checkpoint(self, path_to_save, model_type, model_ID, model_ddp, **kwargs):
-        extra_attrs = {'d_model': self.d_model,
-                       'nhead': self.nhead,
-                       'num_layers': self.num_layers,
-                       'dim_feedforward': self.dim_feedforward}
-        super().save_checkpoint(path_to_save, model_type, model_ID, model_ddp, **extra_attrs)
+        super().save_checkpoint(path_to_save, model_type, model_ID, model_ddp, **self.extra_attrs)
 
     def save_model(self, path_to_save, model_type, model_ID, **kwargs):
         """Save the best model weights with additional attributes specific to Transformer."""
-        extra_attrs = {'d_model': self.d_model,
-                       'nhead': self.nhead,
-                       'num_layers': self.num_layers,
-                       'dim_feedforward': self.dim_feedforward}
-        super().save_checkpoint(path_to_save, model_type, model_ID, **extra_attrs)
+        super().save_model(path_to_save, model_type, model_ID, **self.extra_attrs)
