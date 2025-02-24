@@ -48,7 +48,7 @@ def run_model(path_to_data,
         train_labels = train_labels.unsqueeze(-1)
         val_labels = val_labels.unsqueeze(-1)
         test_labels = np.expand_dims(test_labels, axis=-1)
-        pass
+
 
     ann = BaseModel(hidden_layers=layers,
                     optimizer='adam',
@@ -67,8 +67,8 @@ def run_model(path_to_data,
                       train_l=train_labels,
                       d_model=4,
                       nhead=2,
-                      num_layers=2,
-                      dim_feedforward=128)
+                      dim_feedforward=128,
+                      num_layers=1)
 
     logger.info('Starting model training')
 
