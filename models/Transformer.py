@@ -52,7 +52,7 @@ class Transformer_Topology(nn.Module):
 
             layers.append(nn.Linear(self.hidden_layers[-1], self.output_size))
 
-            self.mlp = nn.ModuleList(layers)
+            self.mlp = nn.Sequential(layers)
         else:
             self.output = nn.Linear(self.d_model, self.output_size)
 
@@ -117,8 +117,9 @@ class Transformer(BaseModel):
             train_l (Tensor): Training labels.
         """
         # This is done to accommodate the parent method, which requires a list to be passed
-        self.hidden_layers = hidden_layers if hidden_layers else [1]
-        super().__init__(self.hidden_layers, optimizer, loss_function, epochs, batch_size, train_f, train_l)
+        self.hidden_layers = hidden_layers
+        pass_layers = hidden_layers if hidden_layers else [1]
+        super().__init__(pass_layers, optimizer, loss_function, epochs, batch_size, train_f, train_l)
 
         self.d_model = d_model
         self.nhead = nhead
