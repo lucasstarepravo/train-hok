@@ -52,7 +52,7 @@ class Transformer_Topology(nn.Module):
 
             layers.append(nn.Linear(self.hidden_layers[-1], self.output_size))
 
-            self.mlp = nn.Sequential(layers)
+            self.mlp = nn.ModuleList(layers)
         else:
             self.output = nn.Linear(self.d_model, self.output_size)
 
@@ -78,7 +78,10 @@ class Transformer_Topology(nn.Module):
             B, S, D = x.shape
             x_flat = x.reshape(B * S, D)  # shape: (B*S, d_model)
             # Process each token with the MLP (NN_Topology).
-            x_flat = self.mlp(x_flat)  # shape: (B*S, output_size)
+
+            for layer in self.mlp:
+                x_flat = layer(x_flat)
+
             # Reshape back to (batch_size, seq_len, output_size)
             x = x_flat.reshape(B, S, -1)
         else:
