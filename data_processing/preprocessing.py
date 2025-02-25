@@ -17,7 +17,7 @@ def feat_extract(coor, neigh_link):
     :return:
     features: is a np.array with 3D dimensions (ref_node_index, neigh_node_index, x_or_y_distance from ref node)
     """
-    neigh_link = neigh_link - 1
+    neigh_link = neigh_link - 1  # adapting index taken from FORTRAN
     rows = neigh_link.shape[0]
     cols = neigh_link.shape[1]
     features = []
