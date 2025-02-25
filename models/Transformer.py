@@ -84,13 +84,13 @@ class Transformer(BaseModel):
                  nhead: int,
                  num_layers: int,
                  dim_feedforward: int,
-                 hidden_layers: list,  # Retained for compatibility; not used directly.
                  optimizer: str,
                  loss_function: str,
                  epochs: int,
                  batch_size: int,
                  train_f: Tensor,
-                 train_l: Tensor) -> None:
+                 train_l: Tensor,
+                 hidden_layers=None) -> None:
         """
         Mesh-free attention model using an encoder-only transformer architecture.
 
@@ -107,7 +107,10 @@ class Transformer(BaseModel):
             train_f (Tensor): Training features.
             train_l (Tensor): Training labels.
         """
-        super().__init__(hidden_layers, optimizer, loss_function, epochs, batch_size, train_f, train_l)
+        # This is done to accommodate the parent method, which requires a list to be passed
+        self.hidden_layers = hidden_layers if hidden_layers else [1]
+        super().__init__(self.hidden_layers, optimizer, loss_function, epochs, batch_size, train_f, train_l)
+
         self.d_model = d_model
         self.nhead = nhead
         self.num_layers = num_layers
@@ -115,7 +118,7 @@ class Transformer(BaseModel):
         self.input_size = int(train_f.shape[-1])
         self.seq_len = int(train_f.shape[1])
         self.output_size = int(train_l.shape[-1])
-        self.hidden_layers = hidden_layers
+
 
         # Replace the default model with Transformer
         self.model = Transformer_Topology(
@@ -126,7 +129,7 @@ class Transformer(BaseModel):
             num_layers=num_layers,
             dim_feedforward=dim_feedforward,
             output_size=self.output_size,
-            hidden_layers=self.hidden_layers
+            hidden_layers=self.hidden_layers if hidden_layers else None
         )
 
         self.extra_attrs = {'d_model': self.d_model,
