@@ -41,9 +41,18 @@ class Transformer_Topology(nn.Module):
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
 
         if hidden_layers:
-            self.mlp = NN_Topology(input_size=self.d_model,
-                                   hidden_layers=hidden_layers,
-                                   output_size=self.output_size)
+            layers = [nn.Linear(self.d_model, self.hidden_layers[0])]
+            layers += [nn.LayerNorm(self.hidden_layers[0])]
+            layers += [nn.SiLU()]
+
+            for i in range(1, len(self.hidden_layers)):
+                layers.append(nn.Linear(self.hidden_layers[i - 1], self.hidden_layers[i]))
+                layers.append(nn.LayerNorm(self.hidden_layers[i]))
+                layers.append(nn.SiLU())
+
+            layers.append(nn.Linear(self.hidden_layers[-1], self.output_size))
+
+            self.mlp = nn.ModuleList(layers)
         else:
             self.output = nn.Linear(self.d_model, self.output_size)
 
