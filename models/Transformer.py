@@ -23,7 +23,6 @@ class Transformer_Topology(nn.Module):
         self.input_size = input_size
         self.seq_len = seq_len
         self.d_model = d_model
-        self.nhead = nhead
         self.dim_feedforward = dim_feedforward
         self.output_size = output_size
         self.hidden_layers = hidden_layers
@@ -120,10 +119,10 @@ class Transformer(BaseModel):
             train_l (Tensor): Training labels.
         """
         # This is done to accommodate the parent method, which requires a list to be passed
-        self.hidden_layers = hidden_layers
         pass_layers = hidden_layers if hidden_layers else [1]
         super().__init__(pass_layers, optimizer, loss_function, epochs, batch_size, train_f, train_l)
 
+        self.hidden_layers = hidden_layers
         self.d_model = d_model
         self.nhead = nhead
         self.num_layers = num_layers
@@ -142,7 +141,7 @@ class Transformer(BaseModel):
             num_layers=num_layers,
             dim_feedforward=dim_feedforward,
             output_size=self.output_size,
-            hidden_layers=self.hidden_layers if hidden_layers else None
+            hidden_layers=self.hidden_layers
         )
 
         self.extra_attrs = {'d_model': self.d_model,
