@@ -4,6 +4,52 @@ import torch
 import torch.nn as nn
 
 
+class KolmogorovArnoldNetwork(nn.Module):
+    def __init__(self, input_dim: int, output_dim: int, num_terms: int, inner_arch: list):
+        """
+        Kolmogorov–Arnold network that represents a function as a sum of univariate transformations.
+
+        Args:
+            input_dim (int): Dimension of the input (here, d_model).
+            output_dim (int): Desired output dimension.
+            num_terms (int): Number of inner networks (terms in the Kolmogorov representation).
+            inner_arch (list): A list of hidden layer sizes to use in each inner network.
+                               If empty, each inner network is just a linear layer mapping input -> 1.
+        """
+        super(KolmogorovArnoldNetwork, self).__init__()
+        self.num_terms = num_terms
+        # Create a list of inner networks.
+        # Each inner network maps from input_dim -> 1 using a small MLP with the given architecture.
+        self.inner_networks = nn.ModuleList([
+            self._build_inner_network(input_dim, inner_arch) for _ in range(num_terms)
+        ])
+        # Outer layer combines the num_terms scalars to produce the final output.
+        self.outer = nn.Linear(num_terms, output_dim)
+
+    def _build_inner_network(self, input_dim: int, inner_arch: list):
+        layers = []
+        in_features = input_dim
+        # Build the inner MLP from the inner_arch list.
+        for hidden in inner_arch:
+            layers.append(nn.Linear(in_features, hidden))
+            layers.append(nn.LayerNorm(hidden))
+            layers.append(nn.SiLU())
+            in_features = hidden
+        # Final linear mapping to a single scalar.
+        layers.append(nn.Linear(in_features, 1))
+        return nn.Sequential(*layers)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # x is expected to have shape (B * S, d_model)
+        # Process x through each inner network to get a list of scalars.
+        terms = [net(x) for net in self.inner_networks]  # each output: (B * S, 1)
+        # Concatenate along the last dimension to shape (B * S, num_terms)
+        terms_cat = torch.cat(terms, dim=-1)
+        # Combine the terms to get the final output.
+        out = self.outer(terms_cat)
+        return out
+
+
 class Transformer_Topology(nn.Module):
     def __init__(self, input_size: int, d_model: int, nhead: int,
                  num_layers: int, dim_feedforward: int, seq_len: int,
@@ -17,7 +63,12 @@ class Transformer_Topology(nn.Module):
             nhead (int): Number of attention heads.
             num_layers (int): Number of self-attention layers.
             dim_feedforward (int): Hidden dimension for feed-forward layers.
+            seq_len (int): Sequence length.
             output_size (int): Dimension of the output.
+            hidden_layers (list, optional): For standard MLP, a list of hidden sizes.
+                For a Kolmogorov–Arnold network, we interpret hidden_layers as:
+                [num_terms, inner_hidden1, inner_hidden2, ...].
+                If None, a single linear mapping is used.
         """
         super(Transformer_Topology, self).__init__()
         self.input_size = input_size
@@ -28,7 +79,7 @@ class Transformer_Topology(nn.Module):
         self.output_size = output_size
         self.hidden_layers = hidden_layers
 
-        # Create a stack of transformer encoder layers.
+        # Transformer encoder layer.
         encoder_layer = nn.TransformerEncoderLayer(
             d_model=d_model,
             nhead=nhead,
@@ -41,21 +92,14 @@ class Transformer_Topology(nn.Module):
         self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
 
         if hidden_layers:
-            layers = [nn.Linear(self.d_model, self.hidden_layers[0])]
-            layers += [nn.LayerNorm(self.hidden_layers[0])]
-            layers += [nn.SiLU()]
-
-            for i in range(1, len(self.hidden_layers)):
-                layers.append(nn.Linear(self.hidden_layers[i - 1], self.hidden_layers[i]))
-                layers.append(nn.LayerNorm(self.hidden_layers[i]))
-                layers.append(nn.SiLU())
-
-            layers.append(nn.Linear(self.hidden_layers[-1], self.output_size))
-
-            self.mlp = nn.ModuleList(layers)
+            # For the Kolmogorov–Arnold network:
+            # Use the first element as the number of terms and the remaining as the inner network architecture.
+            num_terms = hidden_layers[0]
+            inner_arch = hidden_layers[1:]  # can be an empty list if you want a simple linear mapping per term
+            self.ka_network = KolmogorovArnoldNetwork(self.d_model, self.output_size,
+                                                      num_terms=num_terms, inner_arch=inner_arch)
         else:
             self.output = nn.Linear(self.d_model, self.output_size)
-
 
     def forward(self, src: torch.Tensor) -> torch.Tensor:
         """
@@ -65,7 +109,8 @@ class Transformer_Topology(nn.Module):
             src (Tensor): Input tensor of shape (batch_size, seq_len, input_size).
 
         Returns:
-            Tensor: Output tensor of shape (batch_size, output_size).
+            Tensor: Output tensor of shape (batch_size, seq_len, output_size) if using KA network,
+                    or (batch_size, seq_len, output_size) with a linear projection.
         """
         # Project the input to d_model dimensions.
         x = self.embedding(src)  # Shape: (batch, seq_len, d_model)
@@ -74,14 +119,11 @@ class Transformer_Topology(nn.Module):
         x = self.encoder(x)
 
         if self.hidden_layers:
-            # Flatten batch and sequence dimensions to apply NN_Topology token-wise.
+            # Flatten batch and sequence dimensions to apply the KA network token-wise.
             B, S, D = x.shape
             x_flat = x.reshape(B * S, D)  # shape: (B*S, d_model)
-            # Process each token with the MLP (NN_Topology).
-
-            for layer in self.mlp:
-                x_flat = layer(x_flat)
-
+            # Apply the Kolmogorov–Arnold network.
+            x_flat = self.ka_network(x_flat)
             # Reshape back to (batch_size, seq_len, output_size)
             x = x_flat.reshape(B, S, -1)
         else:
@@ -142,7 +184,7 @@ class Transformer(BaseModel):
             num_layers=num_layers,
             dim_feedforward=dim_feedforward,
             output_size=self.output_size,
-            hidden_layers=self.hidden_layers if hidden_layers else None
+            hidden_layers=self.hidden_layers
         )
 
         self.extra_attrs = {'d_model': self.d_model,
