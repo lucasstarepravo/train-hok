@@ -3,6 +3,9 @@ import math
 import os
 import pickle as pk
 import logging
+
+import torch
+
 from models.SaveNLoad import load_model_instance, save_variable_with_pickle
 
 # Set up logging
@@ -113,7 +116,9 @@ def evaluate_model(test_features,
 
     logger.info("Running predictions on test data")
     model_instance.eval()
-    pred_l = model_instance(test_features)
+
+    with torch.no_grad:
+        pred_l = model_instance(test_features)
 
     if model_type.lower() == 'transformer':
         test_features = test_features.reshape(test_features.shape[0], -1)
@@ -123,7 +128,7 @@ def evaluate_model(test_features,
     moments_act = calc_moments(test_features.numpy(), test_labels, polynomial=polynomial)
     moments_pred = calc_moments(test_features.numpy(), pred_l.detach().numpy(), polynomial=polynomial)
 
-    moment_error = np.mean(abs(moments_pred - moments_act), axis=0)
+    moment_error = np.mean(abs(moments_pred - np.array((0, 0, 1, 0, 1))), axis=0)
     moment_std = np.std((moments_pred - moments_act), axis=0)
 
     logger.info(f"Moment error: {moment_error}")
