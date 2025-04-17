@@ -1,6 +1,6 @@
-# Torch_HK_Surr_ddp
+# train-hok
 
-Torch_SS_Surr_ddp is a PyTorch-based framework for training surrogate models for the high-order kernel in high-order mesh-free methods. This repository supports training three types of models: MLP, PINN, and ResMLP. 'HK' stands for high-order kernel and 'Surr' for surrogate
+train-hok is a PyTorch-based framework with Distributed Data Parallel for training surrogate models for the high-order kernel in high-order mesh-free methods. This repository supports training of: MLP (with regular and custom loss function) and ResMLP. 'hok' stands for high-order kernel.
 
 ## Table of Contents
 
@@ -23,7 +23,7 @@ Torch_SS_Surr_ddp is a PyTorch-based framework for training surrogate models for
 
 1. **Clone the Repository:**
    ```bash
-   git clone https://github.com/lucasstarepravo/Torch_SS_Surr_ddp.git
+   git clone https://github.com/lucasstarepravo/train-hok.git
 
 
 2. **Install Dependencies:**
@@ -37,7 +37,7 @@ The primary entry point is `main.py`.
 Before running, define the following:
 - The location of your training data.
 - The architecture of the model (number of layers and neurons per layer).
-- The type of model to train (choose between PINN, or MLP).
+- The type of model to train
 - The number of GPUs to use.
 - The directory where the trained model should be saved.
 
