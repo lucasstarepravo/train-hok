@@ -13,7 +13,7 @@ train-hok is a PyTorch-based framework with Distributed Data Parallel for traini
 
 ## Features
 
-- **Multiple Model Types:** Train surrogate models using MLP, or PINN.
+- **Customised loss function:** Train surrogate models using MSE or customised loss functions
 - **Distributed Training:** Leverages PyTorch Distributed Data Parallel for efficient multi-GPU training.
 - **Custom Architecture:** Define the model architecture by specifying the number of layers and neurons in each layer.
 - **Flexible Parameter Settings:** Adjust high-level training parameters (e.g., number of epochs, batch size) via the `run_model` function in `main.py` or modify low-level settings directly in the `models` folder.
