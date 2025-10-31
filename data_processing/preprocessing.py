@@ -5,7 +5,6 @@ import math
 from sklearn.model_selection import train_test_split
 import torch
 import os
-import numpy as np
 from tqdm import tqdm
 
 
