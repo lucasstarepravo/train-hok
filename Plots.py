@@ -14,6 +14,7 @@ def plot_training_pytorch(history, log_x=False, log_y=False):
         log_x (bool): Whether to use a logarithmic scale for the x-axis.
         log_y (bool): Whether to use a logarithmic scale for the y-axis.
     """
+
     try:
         training_losses = history.training_loss
         validation_losses = history.val_loss
@@ -41,6 +42,22 @@ def plot_training_pytorch(history, log_x=False, log_y=False):
 
     # Add legend and show the plot
     plt.legend()
+    plt.show()
+
+
+def plot_kernel(features, labels):
+    # flatten all arrays consistently
+    x = features[:, :, 0].flatten()
+    y = features[:, :, 1].flatten()
+    c = labels.flatten()  # same order as x and y
+
+    plt.figure(figsize=(6, 6))
+    sc = plt.scatter(x, y, c=c, cmap='viridis', s=5, alpha=0.8)
+    plt.xlabel('x distance')
+    plt.ylabel('y distance')
+    plt.title('Neighbour offsets coloured by target')
+    plt.axis('equal')
+    plt.colorbar(sc, label='Target value')
     plt.show()
 
 
@@ -137,6 +154,21 @@ def plot_node_prediction_error(pred_l, actual_l, coor_subset, node='random', siz
     add_grids()
     format_axes()
     save_or_show()
+
+def scatter_nodes_weights(feature, label):
+    x = feature[..., 0].ravel()
+    y = feature[..., 1].ravel()
+    c = label.ravel()
+
+    plt.figure(figsize=(6, 6))
+    sc = plt.scatter(x, y, c=c, s=1, cmap='viridis', alpha=0.7)
+    plt.colorbar(sc, label="Weight Value")
+    plt.xlabel("Δx")
+    plt.ylabel("Δy")
+    plt.title("Neighbour Offsets Coloured by Weight")
+    plt.axis("equal")
+    plt.grid(True)
+    plt.show()
 
 
 def plot_c(x_axis, y_axis, optimal_c):

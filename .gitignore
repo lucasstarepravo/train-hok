@@ -6,6 +6,11 @@ __pycache__/
 # C extensions
 *.so
 
+*_graphs
+saved_models
+fortran_data/*
+preproc_data
+
 # Distribution / packaging
 .Python
 build/

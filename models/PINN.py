@@ -10,7 +10,7 @@ def monomial_power_torch(polynomial, device):
         for i in range(total_polynomial + 1):
             monomial_exponent.append((total_polynomial - i, i))
     # Convert list of tuples to a PyTorch tensor
-    return torch.tensor(monomial_exponent, dtype=torch.int, device=device)
+    return torch.tensor(monomial_exponent, dtype=torch.int, device=device, requires_grad=True)
 
 
 class PINN(BaseModel):
