@@ -10,6 +10,9 @@ __pycache__/
 saved_models
 fortran_data/*
 preproc_data
+log*
+preproc_data*
+
 
 # Distribution / packaging
 .Python

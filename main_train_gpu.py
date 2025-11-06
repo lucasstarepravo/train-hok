@@ -9,11 +9,11 @@ import torch.distributed as dist
 from torch.nn.parallel import DistributedDataParallel
 import time
 from torch_geometric.loader import DataLoader
+from data_processing.graph_construction import construct_data_loader
 from torch.optim.lr_scheduler import ReduceLROnPlateau
-from torch.profiler import profile, ProfilerActivity, record_function
+from torch.profiler import profile, ProfilerActivity, record_function, schedule, tensorboard_trace_handler
 
 from Plots import plot_training_pytorch
-from data_processing.graph_construction import InMemoryStencilGraph
 from data_processing.gnn_preproc import load
 from models.labfm_moments import calc_moments_torch
 from models.MessageGNN import MessagePassingGNN
@@ -22,66 +22,9 @@ from models.MessageGNN import MessagePassingGNN
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-if torch.backends.cuda.is_built():
-    torch.backends.cuda.matmul.allow_tf32 = True
-    torch.backends.cudnn.allow_tf32 = True
 
-
-def construct_data_loader(cpu_cores: int,
-                          batch_size: int):
-
-    global train_f, train_l
-    global val_f, val_l
-    global test_f, test_l
-    global embedding_size
-    global prefetch_factor
-
-
-    test_ds = InMemoryStencilGraph(features=test_f,
-                                   labels=test_l,
-                                   embedding_size=embedding_size,
-                                   root='./test_graphs')
-
-    val_ds = InMemoryStencilGraph(features=val_f,
-                                   labels=val_l,
-                                   embedding_size=embedding_size,
-                                   root='./val_graphs')
-
-    train_ds = InMemoryStencilGraph(features=train_f,
-                                   labels=train_l,
-                                   embedding_size=embedding_size,
-                                   root='./train_graphs')
-
-    test_loader = DataLoader(test_ds,
-                             batch_size=batch_size,
-                             shuffle=False,
-                             num_workers=cpu_cores,
-                             pin_memory=True,
-                             drop_last=False,
-                             prefetch_factor=prefetch_factor,
-                             in_order=True)
-
-    val_loader = DataLoader(val_ds,
-                             batch_size=batch_size,
-                             shuffle=False,
-                             num_workers=cpu_cores,
-                             pin_memory=True,
-                             drop_last=True,
-                             prefetch_factor=prefetch_factor,
-                             in_order=True)
-
-    train_loader = DataLoader(train_ds,
-                             batch_size=batch_size,
-                             shuffle=True,
-                             num_workers=cpu_cores,
-                             pin_memory=True,
-                             drop_last=True,
-                             prefetch_factor=prefetch_factor,
-                             in_order=True)
-
-
-
-    return test_loader, val_loader, train_loader
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
 
 
 def train_model(rank: int,
@@ -95,7 +38,8 @@ def train_model(rank: int,
                 out_path: str,
                 train_loader: DataLoader,
                 val_loader: DataLoader,
-                batch_size: int):
+                batch_size: int,
+                derivative: str):
 
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12345'
@@ -108,6 +52,7 @@ def train_model(rank: int,
 
     torch.manual_seed(1222)
 
+    # Implement continue training
     model = MessagePassingGNN(input_size=input_size,
                                 embedding_size=embedding_size,
                                 layers=layers).to(rank) # adjust model
@@ -121,15 +66,18 @@ def train_model(rank: int,
     val_history = []
     best_val_loss = torch.inf
 
+    if derivative == 'laplace':
+        target_moment = torch.tensor(([0, 0, 1, 0, 1]), dtype=torch.float32)
+    elif derivative == 'x':
+        target_moment = torch.tensor(([1, 0, 0, 0, 0]), dtype=torch.float32)
+    elif derivative == 'y':
+        target_moment = torch.tensor(([0, 1, 0, 0, 0]), dtype=torch.float32)
+    else:
+        raise ValueError("derivative must be either 'laplace', 'x', or 'y'")
 
-    target_moment = torch.tensor(([0, 0, 1, 0, 1]), dtype=torch.float32)
     target_moment = torch.reshape(target_moment, (5, 1))
-    target_moment = target_moment.repeat(1,batch_size).to(device=rank)
+    target_moment = target_moment.repeat(1,batch_size).to(device=f'cuda:{rank}')
 
-    #with profile(activities=[ProfilerActivity.CPU,
-    #                         ProfilerActivity.CUDA],
-    #             record_shapes=True,
-    #             profile_memory=True) as prof:
 
     for epoch in range(1, epochs + 1):
         t0 = time.perf_counter()
@@ -139,11 +87,13 @@ def train_model(rank: int,
 
         n_samples = 0
         num_batches = 0
+
         for batch in train_loader:
             num_batches += 1
             batch = batch.to(rank, non_blocking=True) # evaluate where stream synchronisation must happen now
 
             optimizer.zero_grad()
+
             out = model(batch.x,
                         batch.edge_index,
                         batch.edge_attr,
@@ -162,6 +112,8 @@ def train_model(rank: int,
             optimizer.step()
 
             total_loss += loss.detach()
+
+
 
         train_loss = total_loss / num_batches
 
@@ -206,7 +158,9 @@ def train_model(rank: int,
         if rank == 0:
             scheduler.step(val_loss)
 
+
         dist.barrier(device_ids=[rank])
+
 
     dist.destroy_process_group()
 
@@ -231,45 +185,67 @@ def train_model(rank: int,
 
 
 if __name__=='__main__':
-    cpu_cores   = 8
+    cpu_cores   = 4
     batch_size  = 256
     prefetch_factor = 5
     world_size  = 1  # torch.cuda.device_count()
-    model_id    = 2
+    model_id    = 4
     out_path    = './saved_models'
-    epochs      = 120
+    epochs      = 16
     lr          = 1e-3
     input_size  = 2
     layers      = 3
-    embedding_size = 32 # changing embedding size is causing errors
+    embedding_size = 64 # changing embedding size is causing errors
     data_iteration = 8
+    load_weights = False
     base_path = './preproc_data'
+    derivative = 'laplace'
+    root_dir_graphs = 'no_weight'
+    base_path = './preproc_data' if load_weights else './preproc_data_no_w'
+    data_augmentation = True
+
 
     train = True
     plot  = True
 
-    f_path = jn(base_path, f'iter{data_iteration}')
+    f_path = jn(base_path, derivative, f'iter{data_iteration}')
 
     train_f = load(jn(f_path, 'train_f.pk'))
-    train_l = load(jn(f_path, 'train_l.pk'))
-
     test_f = load(jn(f_path, 'test_f.pk'))
-    test_l = load(jn(f_path, 'test_l.pk'))
-
     val_f = load(jn(f_path, 'val_f.pk'))
-    val_l = load(jn(f_path, 'val_l.pk'))
+
+    train_l = test_l = val_l = None
+
 
     train_index = load(jn(f_path, 'train_index.pk'))
     test_index  = load(jn(f_path, 'test_index.pk'))
 
+    if load_weights:
+        train_l = load(jn(f_path, 'train_l.pk'))
+        test_l = load(jn(f_path, 'test_l.pk'))
+        val_l = load(jn(f_path, 'val_l.pk'))
 
     if train:
-        test_loader, val_loader, train_loader = construct_data_loader(cpu_cores=cpu_cores,
-                                                                      batch_size=batch_size)
+        (test_loader,
+         val_loader,
+         train_loader) = construct_data_loader(cpu_cores=cpu_cores,
+                                               batch_size=batch_size,
+                                               train_f=train_f,
+                                               train_l=train_l,
+                                               val_f=val_f,
+                                               val_l=val_l,
+                                               test_f=test_f,
+                                               test_l=test_l,
+                                               embedding_size=embedding_size,
+                                               prefetch_factor=prefetch_factor,
+                                               load_weights=load_weights,
+                                               root=root_dir_graphs,
+                                               data_augmentation=data_augmentation)
+
         os.makedirs(out_path, exist_ok=True)
         mp_torch.spawn(train_model,
                  args=(world_size, model_id, epochs, input_size, embedding_size, layers, lr, out_path,
-                       train_loader, val_loader, batch_size),
+                       train_loader, val_loader, batch_size, derivative),
                  nprocs=world_size,
                  join=True)
 

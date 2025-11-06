@@ -24,10 +24,8 @@ def save(*args):
 
 ########### Below functions to preprocess data (norm, dataset split) ###########
 
-def gnn_train_test_split(features, labels, tt_split=0.9, seed=None):
+def gnn_train_test_split(features, labels, tt_split=0.9, load_weights=True):
     logger.info('Splitting dataset in train-validation-test datasets')
-    #if seed is not None:
-    #    np.random.seed(seed)
 
     # Obtains the total number of points
     rows = features.shape[0]
@@ -48,9 +46,12 @@ def gnn_train_test_split(features, labels, tt_split=0.9, seed=None):
     test_f = features[test_index, ...]
 
     # Separating the output counterparts
-    train_l = labels[train_index, ...]
+    train_l = test_l = None
+    if load_weights:
+        train_l = labels[train_index, ...]
 
-    test_l = labels[test_index, ...]
+        test_l = labels[test_index, ...]
+
 
     return train_f, train_l, test_f, test_l, train_index, test_index
 
@@ -61,7 +62,7 @@ def gnn_denorm(features, labels, h_xy, h_w):
     return features, labels
 
 
-def non_dimension(features, labels, h, dtype='laplace'):
+def non_dimension(features, labels, h, dtype='laplace', load_weights=True):
     """
     This function uses the stencil size which is 1.5dx to normalize the feature vector
     :param features:
@@ -86,7 +87,11 @@ def non_dimension(features, labels, h, dtype='laplace'):
     stand_feature = features / h_scale_xy
 
     # l_mean = np.mean(labels)
-    stand_label = labels * h_scale_w
+    stand_label = None
+    if load_weights:
+        stand_label = labels * h_scale_w
+
+
     return stand_feature, stand_label, h_scale_xy, h_scale_w
 
 ########### Below functions to load and extract data from raw files ###########
@@ -122,21 +127,35 @@ def trim_zero_columns(array, tolerance=1e-10):
     return array  # Return the original array if no all-zero column is found
 
 
-def import_stored_data(base_path, file):
+def import_stored_data(base_path, file, derivative, load_weights = True):
     logger.info('Loading Data')
+    if derivative not in ['laplace', 'x', 'y']:
+        raise ValueError("derivative must be 'laplace', 'x', or 'y'")
+    if derivative == 'laplace':
+        name_adjust = ''
+    elif derivative == 'x':
+        name_adjust = 'x'
+    elif derivative == 'y':
+        name_adjust = 'y'
+
 
     ij_link_path = os.path.join(base_path, 'neigh', f'ij_link{file}.csv')
     coor_path = os.path.join(base_path, 'coor', f'coor{file}.csv')
-    weights_path = os.path.join(base_path, 'weights', 'laplace', f'w_{file}.csv')
+
+    weights = None
+    if load_weights:
+        weights_path = os.path.join(base_path, 'weights', f'{derivative}', f'w{name_adjust}_{file}.csv')
+        weights = np.genfromtxt(weights_path, delimiter=',', skip_header=0)
+
+        weights = np.concatenate((np.zeros(shape=(weights.shape[0], 1)),
+                                  trim_zero_columns(weights[:, 1:])), axis=1)
+
     dx_path = os.path.join(base_path, 'h', f'h{file}.csv')
 
     ij_link = np.genfromtxt(ij_link_path, delimiter=',', skip_header=0)
     coor = np.genfromtxt(coor_path, delimiter=',', skip_header=0)
     coor = coor[:, :-1]
-    weights = np.genfromtxt(weights_path, delimiter=',', skip_header=0)
 
-    weights = np.concatenate((np.zeros(shape=(weights.shape[0], 1)),
-                              trim_zero_columns(weights[:, 1:])), axis=1)
 
     h = np.genfromtxt(dx_path, delimiter=',', skip_header=0)
     h = h[0]

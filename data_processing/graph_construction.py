@@ -1,23 +1,34 @@
+import gc
+import os
+from typing import Optional
+from numpy.typing import NDArray
 from torch_geometric.data import Data, Dataset, InMemoryDataset
-from torch_geometric.transforms import ToUndirected
 import torch
 import numpy as np
 import logging
 from tqdm import tqdm
+from torch_geometric.loader import DataLoader
 
 
 class InMemoryStencilGraph(InMemoryDataset):
     def __init__(self,
-                 features,
-                 labels,
-                 embedding_size,
-                 root,
+                 features: NDArray,
+                 labels: NDArray,
+                 embedding_size: int,
+                 root: str,
+                 load_weights: bool,
+                 data_augmentation: bool,
                  transform=None,
                  pre_transform=None,
                  pre_filter=None):
 
+        self.load_weights = load_weights
+        self.data_augmentation = data_augmentation
+        self.aug_tuples = [(1, 1), (-1, 1), (1, -1)] # finish implementing data augmentation
+
         self.features  = np.ascontiguousarray(features).astype(np.float32, copy=False)
-        self.labels    = np.ascontiguousarray(labels).astype(np.float32, copy=False)
+
+        self.labels    = np.ascontiguousarray(labels).astype(np.float32, copy=False) if load_weights else None
 
         self.total_datapoints = features.shape[0] # num of nodes in domain
         self.max_neighbours = self.features.shape[1] # max number of neighbours
@@ -46,12 +57,14 @@ class InMemoryStencilGraph(InMemoryDataset):
 
             # edge features and label
             # removing the central weight node
-            y = self.labels[idx, :]
-            y = torch.from_numpy(y.copy()).to(torch.float32)
-            y = y[:, None]
+            y = None
+            if self.load_weights:
+                y = self.labels[idx, :]
+                y = torch.from_numpy(y.copy()).to(torch.float32)
+                y = y[:, None]
 
-            if y.shape[0] == 0:
-                raise ValueError(f"Node {idx} has zero valid neighbors.")
+                if y.shape[0] == 0:
+                    raise ValueError(f"Node {idx} has zero valid neighbors.")
 
             #num_neigh = self.distances[d_idx, 1:, 0][torch.isfinite(self.distances[d_idx, 1:, 0])]
             # removing the distance of the central node to itself (0.0)
@@ -71,7 +84,7 @@ class InMemoryStencilGraph(InMemoryDataset):
             rev_edge_index = edge_index[tmp, :]
             edge_index = torch.concat((edge_index, rev_edge_index), dim=1)
 
-            x = torch.ones((y.shape[0], self.embedding_size), dtype=torch.float32)
+            x = torch.ones((self.features[idx, ...].shape[0], self.embedding_size), dtype=torch.float32)
 
             data = Data(x=x,
                         distances=distances,
@@ -85,4 +98,73 @@ class InMemoryStencilGraph(InMemoryDataset):
 
         self.features  = None
         self.labels    = None
+        gc.collect()
         self.save(data_list, self.processed_paths[0])
+
+
+def construct_data_loader(cpu_cores: int,
+                          batch_size: int,
+                          train_f: NDArray,
+                           val_f: NDArray,
+                           test_f: NDArray,
+                          embedding_size: int,
+                          prefetch_factor: int,
+                          load_weights: bool,
+                          root: Optional[str] = '',
+                          data_augmentation: bool = False,
+                          train_l: Optional[NDArray] = None,
+                          val_l: Optional[NDArray] = None,
+                          test_l: Optional[NDArray] = None):
+
+    test_root = os.path.join(root, 'test_graphs')
+    val_root  = os.path.join(root, 'val_graphs')
+    train_root = os.path.join(root, './train_graphs')
+
+
+    test_ds = InMemoryStencilGraph(features=test_f,
+                                   labels=test_l,
+                                   embedding_size=embedding_size,
+                                   root=test_root,
+                                   load_weights=load_weights)
+
+    val_ds = InMemoryStencilGraph(features=val_f,
+                                   labels=val_l,
+                                   embedding_size=embedding_size,
+                                   root=val_root,
+                                   load_weights=load_weights)
+
+    train_ds = InMemoryStencilGraph(features=train_f,
+                                   labels=train_l,
+                                   embedding_size=embedding_size,
+                                   root=train_root,
+                                   load_weights=load_weights)
+
+    test_loader = DataLoader(test_ds,
+                             batch_size=batch_size,
+                             shuffle=False,
+                             num_workers=cpu_cores,
+                             pin_memory=True,
+                             drop_last=False,
+                             prefetch_factor=prefetch_factor,
+                             in_order=True)
+
+    val_loader = DataLoader(val_ds,
+                             batch_size=batch_size,
+                             shuffle=False,
+                             num_workers=cpu_cores,
+                             pin_memory=True,
+                             drop_last=True,
+                             prefetch_factor=prefetch_factor,
+                             in_order=True)
+
+    train_loader = DataLoader(train_ds,
+                             batch_size=batch_size,
+                             shuffle=True,
+                             num_workers=cpu_cores,
+                             pin_memory=True,
+                             drop_last=True,
+                             prefetch_factor=prefetch_factor,
+                             in_order=True)
+
+
+    return test_loader, val_loader, train_loader

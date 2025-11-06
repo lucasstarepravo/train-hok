@@ -11,17 +11,85 @@ from sklearn.model_selection import train_test_split
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+def import_no_weight(data_path: str,
+                            data_iteration: int | str,
+                            save_path: str,
+                            derivative: str) -> None:
+    # Import data
+    (ij_link,
+     coor,
+     _,
+     h) = import_stored_data(data_path, data_iteration, derivative, load_weights=False)
+
+    features = feat_extract(coor, ij_link)
+
+    (stand_feature,
+     _,
+     h_xy,
+     h_w) = non_dimension(features,
+                          None,
+                          h,
+                          dtype='laplace',
+                          load_weights=False)
+
+    h_xy_path = os.path.join(save_path, 'h_xy.pk')
+    h_w_path  = os.path.join(save_path, 'h_w.pk')
+
+    save(h_xy_path, h_xy,
+         h_w_path, h_w)
+
+    (train_f,
+     _,
+     test_f,
+     _,
+     train_index,
+     test_index) = gnn_train_test_split(stand_feature,
+                                     None,
+                                     tt_split=0.9,
+                                     load_weights=False)
+
+    (train_f,
+     _,
+     val_f,
+     _,
+     _,
+     _) = gnn_train_test_split(train_f,
+                               None,
+                               tt_split=0.8,
+                               load_weights=False)
+
+
+    train_f_path = os.path.join(save_path, 'train_f.pk')
+
+    test_f_path = os.path.join(save_path, 'test_f.pk')
+
+    val_f_path = os.path.join(save_path, 'val_f.pk')
+
+    train_index_path = os.path.join(save_path, 'train_index.pk')
+    test_index_path = os.path.join(save_path, 'test_index.pk')
+
+    save(train_f_path, train_f,
+         test_f_path, test_f,
+         val_f_path, val_f,
+         train_index_path, train_index,
+         test_index_path, test_index)
+
+
+
+
+
 
 def import_and_process_data(data_path: str,
                             data_iteration: int | str,
-                            save_path: str) -> None:
+                            save_path: str,
+                            derivative: str) -> None:
 
 
     # Import data
     (ij_link,
      coor,
      weights,
-     h) = import_stored_data(data_path, data_iteration)
+     h) = import_stored_data(data_path, data_iteration, derivative)
 
     # Extract and process features
     features = feat_extract(coor, ij_link)
@@ -34,9 +102,9 @@ def import_and_process_data(data_path: str,
      stand_label,
      h_xy,
      h_w) = non_dimension(features,
-                                  weights,
-                                  h,
-                                  dtype='laplace')
+                          weights,
+                          h,
+                          dtype='laplace')
 
     h_xy_path = os.path.join(save_path, 'h_xy.pk')
     h_w_path  = os.path.join(save_path, 'h_w.pk')
@@ -51,7 +119,7 @@ def import_and_process_data(data_path: str,
      test_f,
      test_l,
      train_index,
-     test_index) = gnn_train_test_split(stand_feature, # check i9f first argument is shape I'm eexpecting
+     test_index) = gnn_train_test_split(stand_feature,
                                      stand_label,
                                      tt_split=0.9,
                                      seed=1)  # This generates the test data
@@ -93,10 +161,21 @@ def import_and_process_data(data_path: str,
 
 if __name__ == '__main__':
     data_path   = './fortran_data'
-    data_iteration = 9
+    data_iteration = 8
+    derivative = 'laplace'
+    load_weights = False
 
-    save_path = f'./preproc_data/iter{data_iteration}'
-    os.makedirs(save_path, exist_ok=True)
-    import_and_process_data(data_path=data_path,
-                            data_iteration=data_iteration,
-                            save_path=save_path)
+    if not load_weights:
+        save_path = os.path.join('./preproc_data_no_w', derivative, f'iter{data_iteration}')
+        os.makedirs(save_path, exist_ok=True)
+        import_no_weight(data_path=data_path,
+                         data_iteration=data_iteration,
+                         save_path=save_path,
+                         derivative=derivative)
+
+    else:
+        save_path = os.path.join('./preproc_data', derivative, f'iter{data_iteration}')
+        import_and_process_data(data_path=data_path,
+                                data_iteration=data_iteration,
+                                save_path=save_path,
+                                derivative=derivative)

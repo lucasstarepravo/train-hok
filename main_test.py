@@ -91,6 +91,4 @@ if __name__ == '__main__':
         _, denorm_target = gnn_denorm(test_f, target, h_xy, h_w)
 
 
-
-
     # visualise results
