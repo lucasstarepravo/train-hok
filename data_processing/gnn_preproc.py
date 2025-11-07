@@ -61,6 +61,38 @@ def gnn_denorm(features, labels, h_xy, h_w):
     labels   /= h_w
     return features, labels
 
+def non_dimension_by_r(features, labels, dtype='laplace', load_weights=True):
+    """
+    This function uses the stencil size which is 1.5dx to normalize the feature vector
+    :param features:
+    :param labels:
+    :param h:
+    :param dtype:
+    :return:
+    """
+
+    logger.info('Normalising data')
+
+    if dtype not in ['laplace', 'x', 'y']:
+        raise ValueError('dtype variable must be "laplace", "x" or "y"')
+
+    h = np.max(np.sqrt(np.square(features[:, :, 0]) +  np.square(features[:, :, 1])), axis=1)
+
+    if dtype == 'laplace':
+        h_scale_w = h ** 2
+    else:
+        h_scale_w = h
+
+    h_scale_xy = h
+
+    stand_feature = features / h_scale_xy[:, None, None]
+
+    # l_mean = np.mean(labels)
+    stand_label = None
+    if load_weights:
+        stand_label = labels * h_scale_w
+
+    return stand_feature, stand_label, h_scale_xy, h_scale_w
 
 def non_dimension(features, labels, h, dtype='laplace', load_weights=True):
     """

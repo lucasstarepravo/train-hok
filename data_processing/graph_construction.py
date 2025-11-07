@@ -125,19 +125,22 @@ def construct_data_loader(cpu_cores: int,
                                    labels=test_l,
                                    embedding_size=embedding_size,
                                    root=test_root,
-                                   load_weights=load_weights)
+                                   load_weights=load_weights,
+                                   data_augmentation=data_augmentation)
 
     val_ds = InMemoryStencilGraph(features=val_f,
                                    labels=val_l,
                                    embedding_size=embedding_size,
                                    root=val_root,
-                                   load_weights=load_weights)
+                                   load_weights=load_weights,
+                                  data_augmentation=data_augmentation)
 
     train_ds = InMemoryStencilGraph(features=train_f,
                                    labels=train_l,
                                    embedding_size=embedding_size,
                                    root=train_root,
-                                   load_weights=load_weights)
+                                   load_weights=load_weights,
+                                    data_augmentation=data_augmentation)
 
     test_loader = DataLoader(test_ds,
                              batch_size=batch_size,

@@ -13,9 +13,16 @@ from models.MessageGNN import MessagePassingGNN
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-def load_gnn(model_path, model_id, model_class='gnn'):
 
-    path = os.path.join(model_path, f'attrs{model_id}.pth')
+def load_gnn(model_path=None,
+             model_id=None,
+             model_class='gnn',
+             full_path=None):
+
+    if full_path:
+        path = full_path
+    else:
+        path = os.path.join(model_path, f'attrs{model_id}.pth')
     attrs = torch.load(path,
                        map_location='cpu',
                        weights_only=False)
@@ -33,9 +40,12 @@ def load_gnn(model_path, model_id, model_class='gnn'):
     weight_dict = OrderedDict()
     weight_dict.update(
         (k[len("module."):], v) if k.startswith("module.") else (k, v) for k, v in attrs['weights'].items())
+
     model_instance.load_state_dict(weight_dict)
 
     optimizer = Adam(model_instance.parameters())
+
+
     optimizer.load_state_dict(attrs['optimizer'])
 
     logger.info(f"Model loaded from {path}")

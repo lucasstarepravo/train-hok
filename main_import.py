@@ -1,5 +1,5 @@
-from data_processing.gnn_preproc import (import_stored_data, feat_extract, non_dimension, gnn_train_test_split,
-                                         save)
+from data_processing.gnn_preproc import (import_stored_data, feat_extract, non_dimension, non_dimension_by_r,
+                                         gnn_train_test_split, save)
 from models.labfm_moments import check_moments
 from Plots import *
 from models.SaveNLoad import *
@@ -7,14 +7,20 @@ import pickle as pk
 import os
 import logging
 from sklearn.model_selection import train_test_split
+from memory_profiler import profile
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+@profile
 def import_no_weight(data_path: str,
-                            data_iteration: int | str,
-                            save_path: str,
-                            derivative: str) -> None:
+                        data_iteration: int | str,
+                        save_path: str,
+                        derivative: str) -> None:
+
+    # In the whole script, use the option load_weights = False to only normalise features
+
     # Import data
     (ij_link,
      coor,
@@ -23,14 +29,22 @@ def import_no_weight(data_path: str,
 
     features = feat_extract(coor, ij_link)
 
+    #(stand_feature,
+    # _,
+    # h_xy,
+    # h_w) = non_dimension(features,
+    #                      None,
+    #                      h,
+    #                      dtype=derivative,
+    #                      load_weights=False)
+
     (stand_feature,
      _,
      h_xy,
-     h_w) = non_dimension(features,
-                          None,
-                          h,
-                          dtype='laplace',
-                          load_weights=False)
+     h_w) = non_dimension_by_r(features,
+                               None,
+                               dtype=derivative,
+                               load_weights=False)
 
     h_xy_path = os.path.join(save_path, 'h_xy.pk')
     h_w_path  = os.path.join(save_path, 'h_w.pk')
@@ -104,7 +118,9 @@ def import_and_process_data(data_path: str,
      h_w) = non_dimension(features,
                           weights,
                           h,
-                          dtype='laplace')
+                          dtype=derivative)
+
+
 
     h_xy_path = os.path.join(save_path, 'h_xy.pk')
     h_w_path  = os.path.join(save_path, 'h_w.pk')
@@ -161,7 +177,7 @@ def import_and_process_data(data_path: str,
 
 if __name__ == '__main__':
     data_path   = './fortran_data'
-    data_iteration = 8
+    data_iteration = 6
     derivative = 'laplace'
     load_weights = False
 

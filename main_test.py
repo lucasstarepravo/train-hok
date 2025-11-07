@@ -19,6 +19,7 @@ torch.backends.cudnn.allow_tf32 = True
 
 
 if __name__ == '__main__':
+    #will need to adapt to new directories
     cpu_cores   = 8
     batch_size  = 256
     prefetch_factor = 5
@@ -32,7 +33,8 @@ if __name__ == '__main__':
     plot = True
     save_results = False
 
-    model, _  = load_gnn(model_path, model_id)
+    model, _  = load_gnn(model_path=model_path,
+                         model_id=model_id)
 
     logger.info('Loading data')
     data_path = jn(data_path, f'iter{data_iteration}')
