@@ -7,7 +7,7 @@ def infer(model,
 
     model.eval()
     pred = []
-    target = []
+
 
     with torch.no_grad():
         for batch in loader:
@@ -29,15 +29,13 @@ def infer(model,
 
 
             pred_reshape = torch.reshape(out, (int(max(batch.batch)) + 1, -1))
-            true_reshape = torch.reshape(batch.y, (int(max(batch.batch)) + 1, -1))
+
 
             pred.extend(pred_reshape.detach().cpu().numpy())
-            target.extend(true_reshape.detach().cpu().numpy())
 
     pred = np.array(pred)
-    target = np.array(target)
 
-    return pred, target
+    return pred
 
 
 

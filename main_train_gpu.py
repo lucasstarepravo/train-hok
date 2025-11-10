@@ -19,6 +19,7 @@ from Plots import plot_training_pytorch
 from data_processing.gnn_preproc import load
 from models.labfm_moments import calc_moments_torch
 from models.MessageGNN import MessagePassingGNN
+from models.AttentionGNN import AMessagePassingGNN
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -89,9 +90,12 @@ def train_model(rank: int,
         # get model id from model
 
     else:
-        model = MessagePassingGNN(input_size=input_size,
+        #model = MessagePassingGNN(input_size=input_size,
+        #                            embedding_size=embedding_size,
+        #                            layers=layers).to(rank) # adjust model
+        model = AMessagePassingGNN(input_size=input_size,
                                     embedding_size=embedding_size,
-                                    layers=layers).to(rank) # adjust model
+                                    layers=layers).to(rank)
 
         model = DistributedDataParallel(model, device_ids=[rank])
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
@@ -102,8 +106,7 @@ def train_model(rank: int,
 
 
     scheduler = ReduceLROnPlateau(optimizer=optimizer,
-                                  patience=15)
-
+                                  patience=10)
 
 
     n = int((approximation_order ** 2 + 3 * approximation_order) / 2)
@@ -182,6 +185,7 @@ def train_model(rank: int,
                 val_loss = total_loss / num_batches
 
                 if val_loss < best_val_loss:
+                    check_epoch = epoch
                     best_val_loss = val_loss
                     save_weights = model.state_dict()
                     save_optimizer = optimizer.state_dict()
@@ -211,9 +215,9 @@ def train_model(rank: int,
                          'lr'            : lr,
                          'embedding_size': embedding_size}
             e = epoch + resume_epoch
-            save_path = jn(checkpoint_path, f'attrs{model_id}_epoch{e}.pth')#remove epoch
+            save_path = jn(checkpoint_path, f'attrs{model_id}_epoch{check_epoch}.pth')
             torch.save(save_dict, save_path)
-            logger.info(f'Checkpoint model saved at {save_path} in epoch {epoch}')
+            logger.info(f'Checkpoint model saved at {save_path} in epoch {epoch} from epoch {check_epoch}')
 
 
         dist.barrier(device_ids=[rank])
@@ -232,7 +236,8 @@ def train_model(rank: int,
                  'layers'        : layers,
                  'input_size'    : input_size,
                  'lr'            : lr,
-                 'embedding_size': embedding_size}
+                 'embedding_size': embedding_size,
+                 'approximation_order': approximation_order}
 
     save_path = jn(out_path, f'attrs{model_id}.pth')
 
@@ -246,12 +251,12 @@ if __name__=='__main__':
     batch_size  = 256                                      #
     prefetch_factor = 5                                    # number of batches for cpu to prefetch
     world_size  = 1  # torch.cuda.device_count()           # number of gpus
-    model_id    = 3                                        # id of the model to save
-    epochs      = 120                                      # total of number of epochs to run
+    model_id    = 6                                        # id of the model to save
+    epochs      = 120                                     # total of number of epochs to run
     lr          = 1e-3                                     # learning rate
     input_size  = 2                                        # 2 dimensional input
     layers      = 3                                        # num of gnn layers
-    embedding_size = 32                                    # embedding size
+    embedding_size = 64                                    # embedding size
     data_iteration = 8                                     # which original data iteration to use
     checkpoint_p_epoch = 30                                # every how many epochs to save checkpoint
     approximation_order = 2                                # order of approximation for loss moments
@@ -265,10 +270,10 @@ if __name__=='__main__':
     base_path          = 'preproc_data' if load_weights else 'preproc_data_no_w'   # root dir to get imported preproc data
     data_augmentation  = True                              # not doing anything for now
 
-    train = False                                           # set train=false and plot=True to only visualise training loss
+    train = True                                           # set train=false and plot=True to only visualise training loss
     plot  = True
 
-    f_path = jn(base_path, derivative, f'iter{data_iteration}')
+    f_path = jn(base_path, f'iter{data_iteration}')
 
     if train:
         train_f = load(jn(f_path, 'train_f.pk'))
@@ -318,5 +323,7 @@ if __name__=='__main__':
                            weights_only=False)
         h = {'history': (attrs['train_history'], attrs['val_history'])}
         plot_training_pytorch(h, log_x=True, log_y=True)
+
+
 
         # write and call training plot function

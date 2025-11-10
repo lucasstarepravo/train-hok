@@ -12,7 +12,13 @@ logger = logging.getLogger(__name__)
 class GraphLayer(MessagePassing):
     def __init__(self, embedding_size): # Verify along which axis to propagate
         super().__init__(aggr=None)
+        #self.dropout = nn.Dropout(0.2)
 
+        self.attention_aggr = AttentionalAggregation(nn.Sequential(
+            nn.Linear(embedding_size, embedding_size)),
+            nn.Sequential(
+                nn.Linear(embedding_size, embedding_size),
+                nn.Tanh()))
 
         self.mlp_msg = nn.Sequential(
             nn.Linear(2 * embedding_size, embedding_size),
@@ -54,9 +60,10 @@ class GraphLayer(MessagePassing):
     def aggregate(self,
                   mes: Tensor,
                   index: Tensor) -> Tensor:
-
-        aggregated = self.aggr_m(x=mes,
-                                 index=index)
+        aggregated = self.attention_aggr(x=mes,
+                                         index=index)
+        #aggregated = self.aggr_m(x=mes,
+        #                         index=index)
 
         return aggregated, mes
 
@@ -88,7 +95,7 @@ class GraphLayer(MessagePassing):
         return node_feature_out, edge_upd
 
 
-class MessagePassingGNN(nn.Module):
+class AMessagePassingGNN(nn.Module):
     def __init__(self,
                  embedding_size: int,
                  layers: int,

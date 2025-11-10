@@ -7,13 +7,12 @@ import pickle as pk
 import os
 import logging
 from sklearn.model_selection import train_test_split
-from memory_profiler import profile
+#from memory_profiler import profile
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-@profile
 def import_no_weight(data_path: str,
                         data_iteration: int | str,
                         save_path: str,
@@ -176,13 +175,14 @@ def import_and_process_data(data_path: str,
 
 
 if __name__ == '__main__':
+    # This routine doesn't use h, it normalises the distance and wrt the maximum distance of the neighbours
     data_path   = './fortran_data'
-    data_iteration = 6
-    derivative = 'laplace'
+    data_iteration = 8
+    derivative = 'x'
     load_weights = False
 
     if not load_weights:
-        save_path = os.path.join('./preproc_data_no_w', derivative, f'iter{data_iteration}')
+        save_path = os.path.join('./preproc_data_no_w', f'iter{data_iteration}')
         os.makedirs(save_path, exist_ok=True)
         import_no_weight(data_path=data_path,
                          data_iteration=data_iteration,
@@ -190,7 +190,7 @@ if __name__ == '__main__':
                          derivative=derivative)
 
     else:
-        save_path = os.path.join('./preproc_data', derivative, f'iter{data_iteration}')
+        save_path = os.path.join('./preproc_data', f'iter{data_iteration}')
         import_and_process_data(data_path=data_path,
                                 data_iteration=data_iteration,
                                 save_path=save_path,

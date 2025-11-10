@@ -85,6 +85,7 @@ class InMemoryStencilGraph(InMemoryDataset):
             edge_index = torch.concat((edge_index, rev_edge_index), dim=1)
 
             x = torch.ones((self.features[idx, ...].shape[0], self.embedding_size), dtype=torch.float32)
+            x[0, :] = 1/(x.shape[0]**.5) # setting the initialisation of the node attribute to be 1/degree[i]**.5
 
             data = Data(x=x,
                         distances=distances,
