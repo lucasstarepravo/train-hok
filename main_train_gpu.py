@@ -251,23 +251,23 @@ if __name__=='__main__':
     batch_size  = 256                                      #
     prefetch_factor = 5                                    # number of batches for cpu to prefetch
     world_size  = 1  # torch.cuda.device_count()           # number of gpus
-    model_id    = 6                                        # id of the model to save
+    model_id    = 7                                        # id of the model to save
     epochs      = 120                                     # total of number of epochs to run
     lr          = 1e-3                                     # learning rate
     input_size  = 2                                        # 2 dimensional input
     layers      = 3                                        # num of gnn layers
-    embedding_size = 64                                    # embedding size
-    data_iteration = 8                                     # which original data iteration to use
+    embedding_size = 32                                    # embedding size
+    data_iteration = 4                                     # which original data iteration to use
     checkpoint_p_epoch = 30                                # every how many epochs to save checkpoint
     approximation_order = 2                                # order of approximation for loss moments
     continue_train_model = ''                              # set to checked model full path to resume training
     load_weights       = False                             # set to true if data has weights
-    derivative         = 'laplace'                               # the differential operator the gnn will learn
+    derivative         = 'x'                               # the differential operator the gnn will learn
     base_model_path    = 'saved_models'                    # root dir to save models and checkpoints
     out_path           = jn(base_model_path, derivative)   # dir to save best model trained
     checkpoint_path    = jn(base_model_path, 'checkpoint') # dir to save checkpoint model
-    root_dir_graphs    = 'graphs_no_weight'                # root dir for graphs to be saved
-    base_path          = 'preproc_data' if load_weights else 'preproc_data_no_w'   # root dir to get imported preproc data
+    root_dir_graphs    = 'graphs_no_w'                     # root dir for graphs to be saved
+    base_path          = 'preproc_data_no_w'               # root dir to get imported preproc data
     data_augmentation  = True                              # not doing anything for now
 
     train = True                                           # set train=false and plot=True to only visualise training loss
@@ -276,32 +276,20 @@ if __name__=='__main__':
     f_path = jn(base_path, f'iter{data_iteration}')
 
     if train:
-        train_f = load(jn(f_path, 'train_f.pk'))
-        test_f = load(jn(f_path, 'test_f.pk'))
-        val_f = load(jn(f_path, 'val_f.pk'))
-
-        train_l = test_l = val_l = None
-
-
-        train_index = load(jn(f_path, 'train_index.pk'))
-        test_index  = load(jn(f_path, 'test_index.pk'))
-
-        if load_weights:
-            train_l = load(jn(f_path, 'train_l.pk'))
-            test_l = load(jn(f_path, 'test_l.pk'))
-            val_l = load(jn(f_path, 'val_l.pk'))
+        distances = load(os.path.join(f_path, 'distances.pk'))
+        train_idx = load(os.path.join(f_path, 'train_idx.pk'))
+        val_idx = load(os.path.join(f_path, 'val_idx.pk'))
+        test_idx = load(os.path.join(f_path, 'test_idx.pk'))
 
 
         (test_loader,
          val_loader,
          train_loader) = construct_data_loader(cpu_cores=cpu_cores,
                                                batch_size=batch_size,
-                                               train_f=train_f,
-                                               train_l=train_l,
-                                               val_f=val_f,
-                                               val_l=val_l,
-                                               test_f=test_f,
-                                               test_l=test_l,
+                                               train_idx=train_idx,
+                                               val_idx=val_idx,
+                                               test_idx=test_idx,
+                                               distances=distances,
                                                embedding_size=embedding_size,
                                                prefetch_factor=prefetch_factor,
                                                load_weights=load_weights,

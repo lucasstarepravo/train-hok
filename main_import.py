@@ -1,5 +1,9 @@
+import gc
+
+from torch.nn.functional import embedding
+
 from data_processing.gnn_preproc import (import_stored_data, feat_extract, non_dimension, non_dimension_by_r,
-                                         gnn_train_test_split, save)
+                                         gnn_train_test_split, save, load)
 from models.labfm_moments import check_moments
 from Plots import *
 from models.SaveNLoad import *
@@ -8,10 +12,49 @@ import os
 import logging
 from sklearn.model_selection import train_test_split
 #from memory_profiler import profile
+from data_processing.gnn_preproc import split_data_by_index
+from data_processing.graph_construction import InMemoryStencilGraph
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
+
+def import_parallel(data_path: str,
+                    data_iteration: int | str,
+                    n_cores: int,
+                    save_path: str,
+                    max_neighbours: int | None = None) -> None:
+
+    from data_processing.parallel_load import load_and_stack_ij_links
+
+    distances = load_and_stack_ij_links(data_path,
+                                        data_iteration=data_iteration,
+                                        n_cores=n_cores)
+
+    if max_neighbours: distances = distances[:, :max_neighbours, :]
+
+
+    train_size = int(distances.shape[0] * 0.7)
+    val_size  = int(distances.shape[0] * 0.2)
+    test_size = int(distances.shape[0] * 0.1)
+
+    (train_idx,
+     val_idx,
+     test_idx) = split_data_by_index(0, distances.shape[0], (train_size, val_size, test_size), seed=42)
+
+    # path, obj
+    train_idx_dir = os.path.join(save_path, 'train_idx.pk')
+    val_idx_dir = os.path.join(save_path, 'val_idx.pk')
+    test_idx_dir = os.path.join(save_path, 'test_idx.pk')
+    distances_dir = os.path.join(save_path, 'distances.pk')
+
+
+    save(train_idx_dir, train_idx,
+         val_idx_dir, val_idx,
+         test_idx_dir, test_idx,
+         distances_dir, distances)
+
+
 
 def import_no_weight(data_path: str,
                         data_iteration: int | str,
@@ -86,8 +129,6 @@ def import_no_weight(data_path: str,
          val_f_path, val_f,
          train_index_path, train_index,
          test_index_path, test_index)
-
-
 
 
 
@@ -176,22 +217,45 @@ def import_and_process_data(data_path: str,
 
 if __name__ == '__main__':
     # This routine doesn't use h, it normalises the distance and wrt the maximum distance of the neighbours
-    data_path   = './fortran_data'
-    data_iteration = 8
-    derivative = 'x'
-    load_weights = False
+    data_path         = './fortran_data'
+    data_iteration    = 4
+    n_cores           = 2
+    derivative        = 'x'
+    load_weights      = False
+    parallel          = True
+    construct_graph   = True
+    root              = 'preproc_data_no_w'
+    embedding_size    = 64
+    data_augmentation = False
+    max_neighbours    = 20
 
-    if not load_weights:
+    test_root  = os.path.join(root, 'test_graphs')
+    val_root   = os.path.join(root, 'val_graphs')
+    train_root = os.path.join(root, 'train_graphs')
+
+    if parallel:
+        data_path = 'fortran_parallel_data'
         save_path = os.path.join('./preproc_data_no_w', f'iter{data_iteration}')
         os.makedirs(save_path, exist_ok=True)
-        import_no_weight(data_path=data_path,
-                         data_iteration=data_iteration,
-                         save_path=save_path,
-                         derivative=derivative)
+        import_parallel(data_path=data_path,
+                        data_iteration=data_iteration,
+                        save_path=save_path,
+                        n_cores=n_cores,
+                        max_neighbours=max_neighbours)
 
     else:
-        save_path = os.path.join('./preproc_data', f'iter{data_iteration}')
-        import_and_process_data(data_path=data_path,
-                                data_iteration=data_iteration,
-                                save_path=save_path,
-                                derivative=derivative)
+
+        if not load_weights:
+            save_path = os.path.join('./preproc_data_no_w', f'iter{data_iteration}')
+            os.makedirs(save_path, exist_ok=True)
+            import_no_weight(data_path=data_path,
+                             data_iteration=data_iteration,
+                             save_path=save_path,
+                             derivative=derivative)
+
+        else:
+            save_path = os.path.join('./preproc_data', f'iter{data_iteration}')
+            import_and_process_data(data_path=data_path,
+                                    data_iteration=data_iteration,
+                                    save_path=save_path,
+                                    derivative=derivative)

@@ -13,22 +13,17 @@ from torch_geometric.loader import DataLoader
 class InMemoryStencilGraph(InMemoryDataset):
     def __init__(self,
                  features: NDArray,
-                 labels: NDArray,
                  embedding_size: int,
                  root: str,
-                 load_weights: bool,
                  data_augmentation: bool,
                  transform=None,
                  pre_transform=None,
                  pre_filter=None):
 
-        self.load_weights = load_weights
         self.data_augmentation = data_augmentation
         self.aug_tuples = [(1, 1), (-1, 1), (1, -1)] # finish implementing data augmentation
 
         self.features  = np.ascontiguousarray(features).astype(np.float32, copy=False)
-
-        self.labels    = np.ascontiguousarray(labels).astype(np.float32, copy=False) if load_weights else None
 
         self.total_datapoints = features.shape[0] # num of nodes in domain
         self.max_neighbours = self.features.shape[1] # max number of neighbours
@@ -55,16 +50,6 @@ class InMemoryStencilGraph(InMemoryDataset):
 
         for idx in tqdm(range(self.total_datapoints), desc="Processing graphs"):
 
-            # edge features and label
-            # removing the central weight node
-            y = None
-            if self.load_weights:
-                y = self.labels[idx, :]
-                y = torch.from_numpy(y.copy()).to(torch.float32)
-                y = y[:, None]
-
-                if y.shape[0] == 0:
-                    raise ValueError(f"Node {idx} has zero valid neighbors.")
 
             #num_neigh = self.distances[d_idx, 1:, 0][torch.isfinite(self.distances[d_idx, 1:, 0])]
             # removing the distance of the central node to itself (0.0)
@@ -90,57 +75,46 @@ class InMemoryStencilGraph(InMemoryDataset):
             data = Data(x=x,
                         distances=distances,
                         edge_index=edge_index,
-                        edge_attr=edge_attr,
-                        y=y)
+                        edge_attr=edge_attr)
 
 
             data_list.append(data)
 
 
-        self.features  = None
-        self.labels    = None
         gc.collect()
         self.save(data_list, self.processed_paths[0])
 
 
 def construct_data_loader(cpu_cores: int,
                           batch_size: int,
-                          train_f: NDArray,
-                           val_f: NDArray,
-                           test_f: NDArray,
+                          train_idx: NDArray,
+                           val_idx: NDArray,
+                           test_idx: NDArray,
+                          distances: NDArray,
                           embedding_size: int,
                           prefetch_factor: int,
                           load_weights: bool,
                           root: Optional[str] = '',
-                          data_augmentation: bool = False,
-                          train_l: Optional[NDArray] = None,
-                          val_l: Optional[NDArray] = None,
-                          test_l: Optional[NDArray] = None):
+                          data_augmentation: bool = False):
 
     test_root = os.path.join(root, 'test_graphs')
     val_root  = os.path.join(root, 'val_graphs')
-    train_root = os.path.join(root, './train_graphs')
+    train_root = os.path.join(root, 'train_graphs')
 
 
-    test_ds = InMemoryStencilGraph(features=test_f,
-                                   labels=test_l,
+    test_ds = InMemoryStencilGraph(features=distances[test_idx],
                                    embedding_size=embedding_size,
                                    root=test_root,
-                                   load_weights=load_weights,
                                    data_augmentation=data_augmentation)
 
-    val_ds = InMemoryStencilGraph(features=val_f,
-                                   labels=val_l,
+    val_ds = InMemoryStencilGraph(features=distances[val_idx],
                                    embedding_size=embedding_size,
                                    root=val_root,
-                                   load_weights=load_weights,
                                   data_augmentation=data_augmentation)
 
-    train_ds = InMemoryStencilGraph(features=train_f,
-                                   labels=train_l,
+    train_ds = InMemoryStencilGraph(features=distances[train_idx],
                                    embedding_size=embedding_size,
                                    root=train_root,
-                                   load_weights=load_weights,
                                     data_augmentation=data_augmentation)
 
     test_loader = DataLoader(test_ds,

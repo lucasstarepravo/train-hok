@@ -55,6 +55,34 @@ def gnn_train_test_split(features, labels, tt_split=0.9, load_weights=True):
 
     return train_f, train_l, test_f, test_l, train_index, test_index
 
+
+
+def split_data_by_index(low: int, high: int, sizes: tuple[int, int, int], seed: int | None = None):
+    """
+    Generate three disjoint integer arrays with no overlap within [low, high).
+
+    Args:
+        low, high: range bounds (same as np.arange(low, high))
+        sizes: tuple with the number of integers per array (n1, n2, n3)
+        seed: optional random seed for reproducibility
+
+    Returns:
+        A tuple of three numpy arrays (a1, a2, a3), each with unique values and no overlap.
+    """
+    rng = np.random.default_rng(seed)
+    total_needed = sum(sizes)
+    available = high - low
+    if total_needed > available:
+        raise ValueError(f"Requested {total_needed} unique ints but only {available} available in range [{low}, {high}).")
+
+    # Draw all unique numbers at once
+    all_unique = rng.choice(np.arange(low, high), size=total_needed, replace=False)
+
+    # Split them into 3 arrays
+    n1, n2, n3 = sizes
+    a1, a2, a3 = np.split(all_unique, [n1, n1 + n2])
+    return a1, a2, a3
+
 def gnn_denorm(features, labels, h_xy, h_w):
     logger.info('Denormalising data')
     features *= h_xy

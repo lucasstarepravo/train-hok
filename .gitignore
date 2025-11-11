@@ -12,6 +12,8 @@ fortran_data/*
 preproc_data
 log*
 preproc_data*
+fortran_parallel_data
+fortran_data
 
 
 # Distribution / packaging
