@@ -80,6 +80,14 @@ class InMemoryStencilGraph(InMemoryDataset):
 
             data_list.append(data)
 
+            if self.data_augmentation:
+                data = Data(x=x,
+                            distances=-distances,
+                            edge_index=edge_index,
+                            edge_attr=-edge_attr)
+
+                data_list.append(data)
+
 
         gc.collect()
         self.save(data_list, self.processed_paths[0])
@@ -93,7 +101,6 @@ def construct_data_loader(cpu_cores: int,
                           distances: NDArray,
                           embedding_size: int,
                           prefetch_factor: int,
-                          load_weights: bool,
                           root: Optional[str] = '',
                           data_augmentation: bool = False):
 
