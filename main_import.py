@@ -131,8 +131,6 @@ def import_no_weight(data_path: str,
          test_index_path, test_index)
 
 
-
-
 def import_and_process_data(data_path: str,
                             data_iteration: int | str,
                             save_path: str,
@@ -218,14 +216,12 @@ def import_and_process_data(data_path: str,
 if __name__ == '__main__':
     # This routine doesn't use h, it normalises the distance and wrt the maximum distance of the neighbours
     data_path         = './fortran_data'
-    data_iteration    = 4
+    data_iteration    = 3
     n_cores           = 2
     derivative        = 'x'
     load_weights      = False
     parallel          = True
-    construct_graph   = True
     root              = 'preproc_data_no_w'
-    embedding_size    = 64
     data_augmentation = False
     max_neighbours    = 20
 
