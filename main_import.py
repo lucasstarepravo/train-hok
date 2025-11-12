@@ -1,5 +1,6 @@
 import gc
 
+import numpy as np
 from torch.nn.functional import embedding
 
 from data_processing.gnn_preproc import (import_stored_data, feat_extract, non_dimension, non_dimension_by_r,
@@ -31,7 +32,12 @@ def import_parallel(data_path: str,
                                         data_iteration=data_iteration,
                                         n_cores=n_cores)
 
-    if max_neighbours: distances = distances[:, :max_neighbours, :]
+    if max_neighbours:
+
+        distances   = distances[:, :max_neighbours, :]
+        r_distances = (distances[..., 0] ** 2 + distances[..., 1] ** 2) ** .5
+        max_r       = np.max(r_distances, axis=1)
+        distances   = distances / max_r[..., None, None]
 
 
     train_size = int(distances.shape[0] * 0.7)
@@ -216,7 +222,7 @@ def import_and_process_data(data_path: str,
 if __name__ == '__main__':
     # This routine doesn't use h, it normalises the distance and wrt the maximum distance of the neighbours
     data_path         = './fortran_data'
-    data_iteration    = 3
+    data_iteration    = 1
     n_cores           = 2
     derivative        = 'x'
     load_weights      = False
