@@ -45,11 +45,14 @@ def plot_training_pytorch(history, log_x=False, log_y=False):
     plt.show()
 
 
-def plot_kernel(features, labels, alpha=0.6, size = 2):
+def plot_kernel(features, labels=None, alpha=0.6, size = 2):
     # flatten all arrays consistently
     x = features[:, :, 0].flatten()
     y = features[:, :, 1].flatten()
-    c = labels.flatten()  # same order as x and y
+    if labels:
+        c = labels.flatten()  # same order as x and y
+    else:
+        c = np.zeros(x.shape)
 
     plt.figure(figsize=(6, 6))
     sc = plt.scatter(x, y, c=c, cmap='viridis', s=size, alpha=alpha)
@@ -59,6 +62,9 @@ def plot_kernel(features, labels, alpha=0.6, size = 2):
     plt.axis('equal')
     plt.colorbar(sc, label='Target value')
     plt.show()
+
+
+
 
 
 # This function will be used to plot 1 or 3 graphs, either only one graph with the % prediction error, or the one just
