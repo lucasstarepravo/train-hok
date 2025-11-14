@@ -24,7 +24,8 @@ def import_parallel(data_path: str,
                     data_iteration: int | str,
                     n_cores: int,
                     save_path: str,
-                    max_neighbours: int | None = None) -> None:
+                    max_neighbours: int | None = None,
+                    plot_stencils: bool = False) -> None:
 
     from data_processing.parallel_load import load_and_stack_ij_links
 
@@ -39,6 +40,9 @@ def import_parallel(data_path: str,
         max_r       = np.max(r_distances, axis=1)
         distances   = distances / max_r[..., None, None]
 
+    if plot_stencils:
+        plot_kernel(distances)
+
 
     train_size = int(distances.shape[0] * 0.7)
     val_size  = int(distances.shape[0] * 0.2)
@@ -47,6 +51,10 @@ def import_parallel(data_path: str,
     (train_idx,
      val_idx,
      test_idx) = split_data_by_index(0, distances.shape[0], (train_size, val_size, test_size), seed=42)
+
+    print('Training dataset size: ', train_idx.shape)
+    print('Validation dataset size: ', val_idx.shape)
+    print('Test dataset size: ', test_idx.shape)
 
     # path, obj
     train_idx_dir = os.path.join(save_path, 'train_idx.pk')
@@ -229,7 +237,8 @@ if __name__ == '__main__':
     parallel          = True
     root              = 'preproc_data_no_w'
     data_augmentation = False
-    max_neighbours    = 20
+    max_neighbours    = None
+    plot_stencil      = False
 
     test_root  = os.path.join(root, 'test_graphs')
     val_root   = os.path.join(root, 'val_graphs')
@@ -243,7 +252,8 @@ if __name__ == '__main__':
                         data_iteration=data_iteration,
                         save_path=save_path,
                         n_cores=n_cores,
-                        max_neighbours=max_neighbours)
+                        max_neighbours=max_neighbours,
+                        plot_stencils=plot_stencil)
 
     else:
 

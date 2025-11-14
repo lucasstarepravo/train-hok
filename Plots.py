@@ -49,13 +49,14 @@ def plot_kernel(features, labels=None, alpha=0.6, size = 2):
     # flatten all arrays consistently
     x = features[:, :, 0].flatten()
     y = features[:, :, 1].flatten()
-    if labels:
-        c = labels.flatten()  # same order as x and y
-    else:
-        c = np.zeros(x.shape)
+    if labels is not None:
+        c = labels.flatten()
 
     plt.figure(figsize=(6, 6))
-    sc = plt.scatter(x, y, c=c, cmap='viridis', s=size, alpha=alpha)
+    if labels is not None:
+        sc = plt.scatter(x, y, c=c, cmap='viridis', s=size, alpha=alpha)
+    else:
+        sc = plt.scatter(x, y, cmap='viridis', s=size, alpha=alpha)
     plt.xlabel('x distance')
     plt.ylabel('y distance')
     plt.title('Neighbour offsets coloured by target')

@@ -27,15 +27,13 @@ if __name__ == '__main__':
     cpu_cores   = 8
     batch_size  = 256
     prefetch_factor = 5
-    model_id    = 6
+    model_id    = 11
     approximation_order = 2
     data_path   = './preproc_data_no_w'
-    model_path = './saved_models'
-    derivative  = 'laplace'
+    model_path  = './saved_models'
+    derivative  = 'x'
     model_path  = jn(model_path, derivative)
-    data_iteration = 8
-    root_dir_graphs = jn('graphs_no_weight', 'test_graphs')
-    load_weights = False
+    data_iteration = 2
     data_augmentation = False
 
     plot = True
@@ -49,22 +47,15 @@ if __name__ == '__main__':
     logger.info('Loading data')
     data_path = jn(data_path, f'iter{data_iteration}')
 
-    test_l = None
-    if load_weights: test_l = load(jn(data_path, 'test_l.pk'))
+    distances = load(jn(data_path, 'distances.pk'))
+    test_idx = load(jn(data_path, 'test_idx.pk'))
 
-    test_f = load(jn(data_path, 'test_f.pk'))
-    test_index = load(jn(data_path, 'test_index.pk'))
-
-    #h_xy = load(jn(data_path, 'h_xy.pk'))
-    #h_w = load(jn(data_path, 'h_w.pk'))
 
     logger.info('Constructing loader')
-
-    test_ds = InMemoryStencilGraph(features=test_f,
-                                   labels=test_l,
-                                   embedding_size=model.embedding_size,
+    root_dir_graphs = jn('graphs', str(data_iteration), 'test_graphs')
+    test_ds = InMemoryStencilGraph(features=distances[test_idx],
+                                   embedding_size=64,
                                    root=root_dir_graphs,
-                                   load_weights=load_weights,
                                    data_augmentation=data_augmentation)
 
     test_loader = DataLoader(test_ds,
@@ -88,7 +79,7 @@ if __name__ == '__main__':
 
     logger.info('Computing moments')
 
-    pred_moments = calc_moments_test(test_f,
+    pred_moments = calc_moments_test(distances[test_idx],
                                      pred,
                                      approximation_order=approximation_order)
 
@@ -112,11 +103,7 @@ if __name__ == '__main__':
     print('moments std dev: ', gnn_std)
 
     if plot:
-        plot_kernel(test_f, pred)
-
-
-
-
+        plot_kernel(distances[test_idx], pred, alpha=1)
 
 
     # visualise results

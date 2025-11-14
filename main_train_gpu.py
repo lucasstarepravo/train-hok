@@ -62,6 +62,7 @@ def train_model(rank: int,
     # if we are resuming training load model and optimiser
 
     if resume_training:
+        logger.info(f'Resuming training for model {resume_training}')
 
         attrs = torch.load(resume_training,
                            map_location='cpu',
@@ -69,9 +70,11 @@ def train_model(rank: int,
 
         layers = attrs['layers']
         embedding_size = attrs['embedding_size']
+        lr = attrs['lr']
 
-        model = MessagePassingGNN(embedding_size=embedding_size,
-                                           layers=layers)
+        model = AMessagePassingGNN(embedding_size=embedding_size,
+                                  layers=layers)
+
         weight_dict = OrderedDict()
 
         weight_dict.update(
@@ -79,6 +82,7 @@ def train_model(rank: int,
             else (k, v) for k, v in attrs['weights'].items())
 
         model.load_state_dict(weight_dict)
+        model = model.to(rank)
         model = DistributedDataParallel(model, device_ids=[rank])
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         optimizer.load_state_dict(attrs['optimizer'])
@@ -98,7 +102,7 @@ def train_model(rank: int,
                                     layers=layers).to(rank)
 
         model = DistributedDataParallel(model, device_ids=[rank])
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+        optimizer = torch.optim.Adam(model.parameters(), lr=10*lr)
         train_history = []
         val_history = []
         best_val_loss = torch.inf
@@ -185,7 +189,8 @@ def train_model(rank: int,
                 val_loss = total_loss / num_batches
 
                 if val_loss < best_val_loss:
-                    check_epoch = epoch
+                    e = epoch + resume_epoch
+                    check_epoch = e
                     best_val_loss = val_loss
                     save_weights = model.state_dict()
                     save_optimizer = optimizer.state_dict()
@@ -194,7 +199,8 @@ def train_model(rank: int,
             val_history.append(val_loss.to('cpu').numpy())
 
             elapsed = time.perf_counter() - t0
-            print(f'Epoch {epoch:3d} — Train Loss: {train_loss:.5e} || Val Loss: {val_loss:.5e} || '
+            e = epoch + resume_epoch
+            print(f'Epoch {e:3d} — Train Loss: {train_loss:.5e} || Val Loss: {val_loss:.5e} || '
                   f'time per epoch: {elapsed:.3f}s')
 
         # The scheduler step must be broadcasted to other GPUs
@@ -213,11 +219,12 @@ def train_model(rank: int,
                          'layers'        : layers,
                          'input_size'    : input_size,
                          'lr'            : lr,
-                         'embedding_size': embedding_size}
+                         'embedding_size': embedding_size,
+                         'model_id'      : model_id}
             e = epoch + resume_epoch
             save_path = jn(checkpoint_path, f'attrs{model_id}_epoch{check_epoch}.pth')
             torch.save(save_dict, save_path)
-            logger.info(f'Checkpoint model saved at {save_path} in epoch {epoch} from epoch {check_epoch}')
+            logger.info(f'Checkpoint model saved at {save_path} in epoch {e} from epoch {check_epoch}')
 
 
         dist.barrier(device_ids=[rank])
@@ -251,29 +258,32 @@ if __name__=='__main__':
     batch_size  = 256                                      #
     prefetch_factor = 5                                    # number of batches for cpu to prefetch
     world_size  = 1  # torch.cuda.device_count()           # number of gpus
-    model_id    = 7                                        # id of the model to save
-    epochs      = 120                                     # total of number of epochs to run
+    model_id    = 13                                      # id of the model to save
+    epochs      = 100                                      # total of number of epochs to run
     lr          = 1e-3                                     # learning rate
     input_size  = 2                                        # 2 dimensional input
     layers      = 3                                        # num of gnn layers
-    embedding_size = 32                                    # embedding size
-    data_iteration = 4                                     # which original data iteration to use
+    embedding_size = 64                                    # embedding size
+    data_iteration = 2                                     # which original data iteration to use
     checkpoint_p_epoch = 30                                # every how many epochs to save checkpoint
     approximation_order = 2                                # order of approximation for loss moments
     continue_train_model = ''                              # set to checked model full path to resume training
+                                                           # leave empty string above if new model is being trained
     load_weights       = False                             # set to true if data has weights
-    derivative         = 'x'                               # the differential operator the gnn will learn
+    derivative         = 'x'                               # the differential operator the gnn will learn ('x', 'y', or 'laplace')
     base_model_path    = 'saved_models'                    # root dir to save models and checkpoints
     out_path           = jn(base_model_path, derivative)   # dir to save best model trained
     checkpoint_path    = jn(base_model_path, 'checkpoint') # dir to save checkpoint model
-    root_dir_graphs    = 'graphs_no_w'                     # root dir for graphs to be saved
+    root_dir_graphs    = 'graphs'                          # root dir for graphs to be saved
     base_path          = 'preproc_data_no_w'               # root dir to get imported preproc data
-    data_augmentation  = True                              # not doing anything for now
+    mem_or_disk        = 'disk'                            # dataset to be placed on RAM or disk (either 'mem' or 'disk')
+    data_augmentation  = True                              # does 180-degree rotation in stencils
 
     train = True                                           # set train=false and plot=True to only visualise training loss
     plot  = True
 
     f_path = jn(base_path, f'iter{data_iteration}')
+    root_dir_graphs = jn(root_dir_graphs,mem_or_disk,f'{data_iteration}')
 
     if train:
         distances = load(os.path.join(f_path, 'distances.pk'))
@@ -292,9 +302,9 @@ if __name__=='__main__':
                                                distances=distances,
                                                embedding_size=embedding_size,
                                                prefetch_factor=prefetch_factor,
-                                               load_weights=load_weights,
                                                root=root_dir_graphs,
-                                               data_augmentation=data_augmentation)
+                                               data_augmentation=data_augmentation,
+                                               mem_or_disk=mem_or_disk)
 
         os.makedirs(out_path, exist_ok=True)
         os.makedirs(checkpoint_path, exist_ok=True)
