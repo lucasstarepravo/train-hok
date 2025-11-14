@@ -14,7 +14,7 @@ from torch_geometric.loader import DataLoader
 
 class OnDiskStencilGraph(OnDiskDataset):
     def __init__(self,
-                 features: NDArray,
+                 features: NDArray | None,
                  embedding_size: int,
                  root: str,
                  data_augmentation: bool,
@@ -27,8 +27,9 @@ class OnDiskStencilGraph(OnDiskDataset):
 
         self.features  = np.ascontiguousarray(features).astype(np.float32, copy=False)
 
-        self.total_datapoints = features.shape[0] * 2 \
-            if data_augmentation else features.shape[0] # num of nodes in domain
+
+        self.total_datapoints = features.shape[0] * 2 if data_augmentation else features.shape[0]
+
 
         self.data_aug_tuple = (1, -1) if data_augmentation else (1,)
 
@@ -53,19 +54,18 @@ class OnDiskStencilGraph(OnDiskDataset):
         self.db.connect()
 
 
-
-
     @property
     def processed_file_names(self):
-        return ['data.db'] # i'm not choosing the name of the db anywhere
+        # Name of database
+        return ['data.db']
 
-
+    # Unused since I'm directly using multi_insert in process
     def serialize(self, data: BaseData) -> Any:
         return {
-            "x": data.x,
-            "distances": data.distances,
-            "edge_index": data.edge_index,
-            "edge_attr": data.edge_attr,
+            "x": data['x'],
+            "distances": data['distances'],
+            "edge_index": data['edge_index'],
+            "edge_attr": data['edge_attr'],
         }
 
     def deserialize(self, data: Any) -> BaseData:
@@ -76,18 +76,18 @@ class OnDiskStencilGraph(OnDiskDataset):
 
 
     def len(self) -> int:
-        return self.total_datapoints
+        return len(self.db)
 
 
     def get(self, idx): # if I change the database name format  I'll have to change this
-        return self.db.get(idx)
+        return self.deserialize(self.db.get(idx))
 
 
     def process(self):
 
         multi_idx = []
         multi_data = []
-        insert_interval = 10000
+        insert_interval = 1000
         for idx in tqdm(range(self.total_datapoints), desc="Processing graphs"):
 
             #num_neigh = self.distances[d_idx, 1:, 0][torch.isfinite(self.distances[d_idx, 1:, 0])]
@@ -119,14 +119,18 @@ class OnDiskStencilGraph(OnDiskDataset):
                         'edge_attr': edge_attr
             }
 
-            if idx + 1 % insert_interval != 0:
-                multi_idx.append(idx)
-                multi_data.append(data_dict)
-            else:
+
+            multi_idx.append(idx)
+            multi_data.append(data_dict)
+
+            if (idx + 1) % insert_interval == 0:
                 self.db.multi_insert(multi_idx, multi_data)
                 multi_idx, multi_data = [], []
 
-        self.db.close()
+        if multi_idx:
+            self.db.multi_insert(multi_idx, multi_data)
+
+        #self.db.close()
 
 
 
@@ -243,17 +247,17 @@ def construct_data_loader(cpu_cores: int,
 
 
 
-    test_ds = graph_class(features=distances[test_idx],
+    test_ds = graph_class(features=distances[test_idx] if distances is not None else None,
                                    embedding_size=embedding_size,
                                    root=test_root,
                                    data_augmentation=data_augmentation)
 
-    val_ds = graph_class(features=distances[val_idx],
+    val_ds = graph_class(features=distances[val_idx] if distances is not None else None,
                                    embedding_size=embedding_size,
                                    root=val_root,
                                   data_augmentation=data_augmentation)
 
-    train_ds = graph_class(features=distances[train_idx],
+    train_ds = graph_class(features=distances[train_idx] if distances is not None else None,
                                    embedding_size=embedding_size,
                                    root=train_root,
                                     data_augmentation=data_augmentation)

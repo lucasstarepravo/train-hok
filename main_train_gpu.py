@@ -8,7 +8,6 @@ import logging
 import torch.nn.functional as F
 import torch.multiprocessing as mp_torch
 import torch.distributed as dist
-from torch.nn.parallel import DistributedDataParallel
 import time
 from torch_geometric.loader import DataLoader
 from data_processing.graph_construction import construct_data_loader
@@ -25,13 +24,12 @@ from models.AttentionGNN import AMessagePassingGNN
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
+if torch.cuda.is_available():
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
 
-torch.backends.cuda.matmul.allow_tf32 = True
-torch.backends.cudnn.allow_tf32 = True
 
-
-def train_model(rank: int,
-                world_size: int,
+def train_model(world_size: int,
                 model_id: int,
                 epochs: int,
                 input_size: int,
@@ -48,14 +46,13 @@ def train_model(rank: int,
                 approximation_order: int,
                 resume_training: str):
 
-    os.environ['MASTER_ADDR'] = 'localhost'
-    os.environ['MASTER_PORT'] = '12345'
+    if torch.cuda.is_available():
+        device = 'cuda'
+    else:
+        device = 'cpu'
 
-    torch.cuda.set_device(rank)
 
-    dist.init_process_group('nccl', rank=rank, world_size=world_size)
-
-    print(f"[Rank {rank}] PID: {os.getpid()} started.")
+    print(f"PID: {os.getpid()} started.")
 
     torch.manual_seed(1222)
 
@@ -82,8 +79,7 @@ def train_model(rank: int,
             else (k, v) for k, v in attrs['weights'].items())
 
         model.load_state_dict(weight_dict)
-        model = model.to(rank)
-        model = DistributedDataParallel(model, device_ids=[rank])
+        model = model.to(device)
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         optimizer.load_state_dict(attrs['optimizer'])
 
@@ -91,7 +87,7 @@ def train_model(rank: int,
         val_history   = attrs['val_history']
         resume_epoch  = attrs['epochs']
         best_val_loss = attrs['best_val_loss']
-        # get model id from model
+        #model_id      = attrs['model_id']
 
     else:
         #model = MessagePassingGNN(input_size=input_size,
@@ -99,10 +95,9 @@ def train_model(rank: int,
         #                            layers=layers).to(rank) # adjust model
         model = AMessagePassingGNN(input_size=input_size,
                                     embedding_size=embedding_size,
-                                    layers=layers).to(rank)
+                                    layers=layers).to(device)
 
-        model = DistributedDataParallel(model, device_ids=[rank])
-        optimizer = torch.optim.Adam(model.parameters(), lr=10*lr)
+        optimizer = torch.optim.Adam(model.parameters(), lr=5*lr)
         train_history = []
         val_history = []
         best_val_loss = torch.inf
@@ -125,20 +120,20 @@ def train_model(rank: int,
     else:
         raise ValueError("derivative must be either 'laplace', 'x', or 'y'")
 
-    target_moments = target_moments.repeat(1, batch_size).to(device=f'cuda:{rank}')
+    target_moments = target_moments.repeat(1, batch_size).to(device=device)
 
     for epoch in range(1, epochs + 1):
         t0 = time.perf_counter()
 
         model.train()
-        total_loss = torch.tensor(0.0, device=f'cuda:{rank}')
+        total_loss = torch.tensor(0.0, device=device)
 
         n_samples = 0
         num_batches = 0
 
         for batch in train_loader:
             num_batches += 1
-            batch = batch.to(rank, non_blocking=True) # evaluate where stream synchronisation must happen now
+            batch = batch.to(device, non_blocking=True) # evaluate where stream synchronisation must happen now
 
             optimizer.zero_grad()
 
@@ -164,56 +159,55 @@ def train_model(rank: int,
 
         train_loss = total_loss / num_batches
 
-        if rank == 0:
-            model.eval()
-            total_loss = torch.tensor(0.0, device=f'cuda:{rank}')
-            num_batches = 0
-            with torch.no_grad():
-                for batch in val_loader:
-                    num_batches += 1
-                    batch = batch.to(rank, non_blocking=True)
-                    out = model(batch.x,
-                                batch.edge_index,
-                                batch.edge_attr,
-                                batch.batch)
 
-                    pred_m = calc_moments_torch(batch.distances,
-                                                out,
-                                                batch.batch,
-                                                approximation_order=approximation_order)
+        model.eval()
+        total_loss = torch.tensor(0.0, device=device)
+        num_batches = 0
+        with torch.no_grad():
+            for batch in val_loader:
+                num_batches += 1
+                batch = batch.to(device, non_blocking=True)
+                out = model(batch.x,
+                            batch.edge_index,
+                            batch.edge_attr,
+                            batch.batch)
 
-                    val_loss = F.mse_loss(target_moments, pred_m)
+                pred_m = calc_moments_torch(batch.distances,
+                                            out,
+                                            batch.batch,
+                                            approximation_order=approximation_order)
 
-                    total_loss += val_loss.detach()
+                val_loss = F.mse_loss(target_moments, pred_m)
 
-                val_loss = total_loss / num_batches
+                total_loss += val_loss.detach()
 
-                if val_loss < best_val_loss:
-                    e = epoch + resume_epoch
-                    check_epoch = e
-                    best_val_loss = val_loss
-                    save_weights = model.state_dict()
-                    save_optimizer = optimizer.state_dict()
+            val_loss = total_loss / num_batches
 
-            train_history.append(train_loss.to('cpu').numpy())
-            val_history.append(val_loss.to('cpu').numpy())
+            if val_loss < best_val_loss:
+                e = epoch + resume_epoch
+                check_epoch = e
+                best_val_loss = val_loss
+                save_weights = model.state_dict()
+                save_optimizer = optimizer.state_dict()
 
-            elapsed = time.perf_counter() - t0
-            e = epoch + resume_epoch
-            print(f'Epoch {e:3d} — Train Loss: {train_loss:.5e} || Val Loss: {val_loss:.5e} || '
-                  f'time per epoch: {elapsed:.3f}s')
+        train_history.append(train_loss.to('cpu').numpy())
+        val_history.append(val_loss.to('cpu').numpy())
+
+        elapsed = time.perf_counter() - t0
+        e = epoch + resume_epoch
+        print(f'Epoch {e:3d} — Train Loss: {train_loss:.5e} || Val Loss: {val_loss:.5e} || '
+              f'time per epoch: {elapsed:.3f}s')
 
         # The scheduler step must be broadcasted to other GPUs
-        if rank == 0:
-            scheduler.step(val_loss)
+        scheduler.step(val_loss)
 
-        if epoch % checkpoint_p_epoch == 0 and rank == 0:
+        if epoch % checkpoint_p_epoch == 0:
             save_dict = {'train_history' : train_history,
                          'val_history'   : val_history,
                          'best_val_loss' : best_val_loss,
                          'weights'       : save_weights,
                          'optimizer'     : save_optimizer,
-                         'epochs'        : epoch,
+                         'epochs'        : e,
                          'batch_size'    : batch_size,
                          'world_size'    : world_size,
                          'layers'        : layers,
@@ -227,11 +221,6 @@ def train_model(rank: int,
             logger.info(f'Checkpoint model saved at {save_path} in epoch {e} from epoch {check_epoch}')
 
 
-        dist.barrier(device_ids=[rank])
-
-
-    dist.destroy_process_group()
-    e = epoch + resume_epoch
     save_dict = {'train_history' : train_history,
                  'val_history'   : val_history,
                  'best_val_loss' : best_val_loss,
@@ -244,13 +233,14 @@ def train_model(rank: int,
                  'input_size'    : input_size,
                  'lr'            : lr,
                  'embedding_size': embedding_size,
-                 'approximation_order': approximation_order}
+                 'approximation_order': approximation_order,
+                 'model_id'      : model_id}
 
     save_path = jn(out_path, f'attrs{model_id}.pth')
 
-    if rank == 0:
-        torch.save(save_dict, save_path)
-        logger.info(f'Saved model at {save_path}')
+
+    torch.save(save_dict, save_path)
+    logger.info(f'Saved model at {save_path}')
 
 
 if __name__=='__main__':
@@ -258,8 +248,8 @@ if __name__=='__main__':
     batch_size  = 256                                      #
     prefetch_factor = 5                                    # number of batches for cpu to prefetch
     world_size  = 1  # torch.cuda.device_count()           # number of gpus
-    model_id    = 13                                      # id of the model to save
-    epochs      = 100                                      # total of number of epochs to run
+    model_id    = 12                                      # id of the model to save
+    epochs      = 40                                      # total of number of epochs to run
     lr          = 1e-3                                     # learning rate
     input_size  = 2                                        # 2 dimensional input
     layers      = 3                                        # num of gnn layers
@@ -267,7 +257,7 @@ if __name__=='__main__':
     data_iteration = 2                                     # which original data iteration to use
     checkpoint_p_epoch = 30                                # every how many epochs to save checkpoint
     approximation_order = 2                                # order of approximation for loss moments
-    continue_train_model = ''                              # set to checked model full path to resume training
+    continue_train_model = 'saved_models/x/attrs12.pth'                              # set to checked model full path to resume training
                                                            # leave empty string above if new model is being trained
     load_weights       = False                             # set to true if data has weights
     derivative         = 'x'                               # the differential operator the gnn will learn ('x', 'y', or 'laplace')
@@ -283,7 +273,7 @@ if __name__=='__main__':
     plot  = True
 
     f_path = jn(base_path, f'iter{data_iteration}')
-    root_dir_graphs = jn(root_dir_graphs,mem_or_disk,f'{data_iteration}')
+    root_dir_graphs = jn(root_dir_graphs, mem_or_disk, f'{data_iteration}')
 
     if train:
         distances = load(os.path.join(f_path, 'distances.pk'))
@@ -308,12 +298,10 @@ if __name__=='__main__':
 
         os.makedirs(out_path, exist_ok=True)
         os.makedirs(checkpoint_path, exist_ok=True)
-        mp_torch.spawn(train_model,
-                 args=(world_size, model_id, epochs, input_size, embedding_size, layers, lr, out_path,
-                       train_loader, val_loader, batch_size, derivative, checkpoint_p_epoch, checkpoint_path,
-                       approximation_order, continue_train_model),
-                 nprocs=world_size,
-                 join=True)
+        train_model(world_size, model_id, epochs, input_size, embedding_size, layers, lr, out_path,
+                    train_loader, val_loader, batch_size, derivative, checkpoint_p_epoch, checkpoint_path,
+                    approximation_order, continue_train_model)
+
 
     if plot:
         attrs = torch.load(jn(out_path, f'attrs{model_id}.pth'),
