@@ -33,6 +33,7 @@ if __name__ == '__main__':
     model_path  = './saved_models'
     derivative  = 'x'
     model_path  = jn(model_path, derivative)
+    mem_or_disk = 'disk'
     data_iteration = 2
     data_augmentation = False
 
@@ -45,7 +46,7 @@ if __name__ == '__main__':
                          full_path=None)
 
     logger.info('Loading data')
-    data_path = jn(data_path, f'iter{data_iteration}')
+    data_path = jn(data_path, mem_or_disk, f'iter{data_iteration}')
 
     distances = load(jn(data_path, 'distances.pk'))
     test_idx = load(jn(data_path, 'test_idx.pk'))

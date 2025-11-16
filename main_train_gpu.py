@@ -83,6 +83,8 @@ def train_model(world_size: int,
         optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         optimizer.load_state_dict(attrs['optimizer'])
 
+
+
         train_history = attrs['train_history']
         val_history   = attrs['val_history']
         resume_epoch  = attrs['epochs']
@@ -97,7 +99,7 @@ def train_model(world_size: int,
                                     embedding_size=embedding_size,
                                     layers=layers).to(device)
 
-        optimizer = torch.optim.Adam(model.parameters(), lr=5*lr)
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
         train_history = []
         val_history = []
         best_val_loss = torch.inf
@@ -105,7 +107,8 @@ def train_model(world_size: int,
 
 
     scheduler = ReduceLROnPlateau(optimizer=optimizer,
-                                  patience=10)
+                                  patience=10,
+                                  factor=0.5)
 
 
     n = int((approximation_order ** 2 + 3 * approximation_order) / 2)
@@ -244,12 +247,12 @@ def train_model(world_size: int,
 
 
 if __name__=='__main__':
-    cpu_cores   = 4                                        # number of cpu cores to load data for gpu
+    cpu_cores   = 8                                        # number of cpu cores to load data for gpu
     batch_size  = 256                                      #
     prefetch_factor = 5                                    # number of batches for cpu to prefetch
     world_size  = 1  # torch.cuda.device_count()           # number of gpus
-    model_id    = 12                                      # id of the model to save
-    epochs      = 40                                      # total of number of epochs to run
+    model_id    = 13                                      # id of the model to save
+    epochs      = 100                                      # total of number of epochs to run
     lr          = 1e-3                                     # learning rate
     input_size  = 2                                        # 2 dimensional input
     layers      = 3                                        # num of gnn layers
