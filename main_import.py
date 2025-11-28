@@ -34,7 +34,7 @@ def import_parallel(data_path: str,
                                         n_cores=n_cores)
 
     if max_neighbours:
-
+        max_neighbours = min(max_neighbours, distances.shape[1])
         distances   = distances[:, :max_neighbours, :]
         r_distances = (distances[..., 0] ** 2 + distances[..., 1] ** 2) ** .5
         max_r       = np.max(r_distances, axis=1)
@@ -56,6 +56,7 @@ def import_parallel(data_path: str,
     print('Validation dataset size: ', val_idx.shape[0])
     print('Test dataset size: ', test_idx.shape[0])
     print('Total dataset size: ', train_idx.shape[0] + val_idx.shape[0] + test_idx.shape[0])
+    print('Number of neighbours: ', max_neighbours)
 
     # path, obj
     train_idx_dir = os.path.join(save_path, 'train_idx.pk')
