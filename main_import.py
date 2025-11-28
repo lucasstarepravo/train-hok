@@ -52,9 +52,10 @@ def import_parallel(data_path: str,
      val_idx,
      test_idx) = split_data_by_index(0, distances.shape[0], (train_size, val_size, test_size), seed=42)
 
-    print('Training dataset size: ', train_idx.shape)
-    print('Validation dataset size: ', val_idx.shape)
-    print('Test dataset size: ', test_idx.shape)
+    print('Training dataset size: ', train_idx.shape[0])
+    print('Validation dataset size: ', val_idx.shape[0])
+    print('Test dataset size: ', test_idx.shape[0])
+    print('Total dataset size: ', train_idx.shape[0] + val_idx.shape[0] + test_idx.shape[0])
 
     # path, obj
     train_idx_dir = os.path.join(save_path, 'train_idx.pk')
@@ -230,8 +231,8 @@ def import_and_process_data(data_path: str,
 if __name__ == '__main__':
     # This routine doesn't use h, it normalises the distance and wrt the maximum distance of the neighbours
     data_path         = './fortran_data'
-    data_iteration    = 1
-    n_cores           = 2
+    data_iteration    = 4
+    n_cores           = 5
     derivative        = 'x'
     load_weights      = False
     parallel          = True

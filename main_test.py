@@ -1,4 +1,5 @@
 from scipy.differentiate import derivative
+from torch.nn.functional import embedding
 
 from models.SaveNLoad import load_gnn
 from data_processing.gnn_preproc import load, gnn_denorm
@@ -25,17 +26,19 @@ if __name__ == '__main__':
     #will need to adapt to new directories
     world_size = 1  # torch.cuda.device_count()
     cpu_cores   = 8
-    batch_size  = 256
+    batch_size  = 2**12
     prefetch_factor = 5
-    model_id    = 11
+    model_id    = 14
     approximation_order = 2
     data_path   = './preproc_data_no_w'
     model_path  = './saved_models'
     derivative  = 'x'
     model_path  = jn(model_path, derivative)
     mem_or_disk = 'disk'
-    data_iteration = 2
+    full_path   = 'saved_models/checkpoint/attrs14_epoch489.pth'
+    data_iteration = 4
     data_augmentation = False
+    embedding_size = 128
 
     plot = True
     save_results = False
@@ -43,19 +46,19 @@ if __name__ == '__main__':
     model, _  = load_gnn(model_path=model_path,
                          model_id=model_id,
                          model_class='a_gnn',
-                         full_path=None)
+                         full_path=full_path)
 
     logger.info('Loading data')
-    data_path = jn(data_path, mem_or_disk, f'iter{data_iteration}')
+    data_path = jn(data_path, f'iter{data_iteration}')
 
     distances = load(jn(data_path, 'distances.pk'))
     test_idx = load(jn(data_path, 'test_idx.pk'))
 
 
     logger.info('Constructing loader')
-    root_dir_graphs = jn('graphs', str(data_iteration), 'test_graphs')
+    root_dir_graphs = jn('graphs', mem_or_disk, str(data_iteration), 'test_graphs')
     test_ds = InMemoryStencilGraph(features=distances[test_idx],
-                                   embedding_size=64,
+                                   embedding_size=embedding_size,
                                    root=root_dir_graphs,
                                    data_augmentation=data_augmentation)
 

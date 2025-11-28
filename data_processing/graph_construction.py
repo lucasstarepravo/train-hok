@@ -1,7 +1,8 @@
 import gc
 import os
-from typing import Optional, Any
+from typing import Optional, Any, Union, Iterable, List
 from numpy.typing import NDArray
+from torch import Tensor
 from torch_geometric.data import Data, InMemoryDataset, OnDiskDataset, SQLiteDatabase, Database
 import torch
 import numpy as np
@@ -10,7 +11,7 @@ import logging
 from torch_geometric.data.data import BaseData
 from tqdm import tqdm
 from torch_geometric.loader import DataLoader
-
+from torch_geometric.loader.mixin import AffinityMixin
 
 class OnDiskStencilGraph(OnDiskDataset):
     def __init__(self,
@@ -43,7 +44,7 @@ class OnDiskStencilGraph(OnDiskDataset):
             dtype=torch.long).T
 
         self.schema = {
-            'x': dict(dtype=torch.float32, size=(-1,embedding_size)),
+            'x': dict(dtype=torch.float32, size=(-1,1)),
             'distances': dict(dtype=torch.float32, size=(-1,2)),
             'edge_index': dict(dtype=torch.long, size=(2,-1)),
             'edge_attr': dict(dtype=torch.float32, size=(-1,2))
@@ -108,8 +109,8 @@ class OnDiskStencilGraph(OnDiskDataset):
             rev_edge_index = edge_index[tmp, :]
             edge_index = torch.concat((edge_index, rev_edge_index), dim=1)
 
-            x = torch.ones((self.features[idx, ...].shape[0], self.embedding_size), dtype=torch.float32)
-            x[0, :] = 1/(x.shape[0]**.5) # setting the initialisation of the node attribute to be 1/degree[i]**.5
+            x = torch.ones((self.features[idx, ...].shape[0], 1), dtype=torch.float32)
+            x[0] = 1/(x.shape[0]**.5) # setting the initialisation of the node attribute to be 1/degree[i]**.5
 
 
             data_dict = {
@@ -131,7 +132,6 @@ class OnDiskStencilGraph(OnDiskDataset):
             self.db.multi_insert(multi_idx, multi_data)
 
         #self.db.close()
-
 
 
 
@@ -218,76 +218,7 @@ class InMemoryStencilGraph(InMemoryDataset):
         self.save(data_list, self.processed_paths[0])
 
 
-def construct_data_loader(cpu_cores: int,
-                          batch_size: int,
-                          train_idx: NDArray,
-                           val_idx: NDArray,
-                           test_idx: NDArray,
-                          distances: NDArray,
-                          embedding_size: int,
-                          prefetch_factor: int,
-                          mem_or_disk: str = 'mem',
-                          root: Optional[str] = '',
-                          data_augmentation: bool = False):
-
-    test_root = os.path.join(root, 'test_graphs')
-    val_root  = os.path.join(root, 'val_graphs')
-    train_root = os.path.join(root, 'train_graphs')
-
-    if mem_or_disk not in ['mem', 'disk']:
-        raise ValueError("mem_or_disk must be 'mem' or 'disk'")
-
-    if mem_or_disk == 'disk':
-        graph_class = OnDiskStencilGraph
-        pin_memory = False
-    else:
-        graph_class = InMemoryStencilGraph
-        pin_memory = True
-
-
-
-
-    test_ds = graph_class(features=distances[test_idx] if distances is not None else None,
-                                   embedding_size=embedding_size,
-                                   root=test_root,
-                                   data_augmentation=data_augmentation)
-
-    val_ds = graph_class(features=distances[val_idx] if distances is not None else None,
-                                   embedding_size=embedding_size,
-                                   root=val_root,
-                                  data_augmentation=data_augmentation)
-
-    train_ds = graph_class(features=distances[train_idx] if distances is not None else None,
-                                   embedding_size=embedding_size,
-                                   root=train_root,
-                                    data_augmentation=data_augmentation)
-
-    test_loader = DataLoader(test_ds,
-                             batch_size=batch_size,
-                             shuffle=False,
-                             num_workers=cpu_cores,
-                             pin_memory=pin_memory,
-                             drop_last=False,
-                             prefetch_factor=prefetch_factor,
-                             in_order=True)
-
-    val_loader = DataLoader(val_ds,
-                             batch_size=batch_size,
-                             shuffle=False,
-                             num_workers=cpu_cores,
-                             pin_memory=pin_memory,
-                             drop_last=True,
-                             prefetch_factor=prefetch_factor,
-                             in_order=True)
-
-    train_loader = DataLoader(train_ds,
-                             batch_size=batch_size,
-                             shuffle=True,
-                             num_workers=cpu_cores,
-                             pin_memory=pin_memory,
-                             drop_last=True,
-                             prefetch_factor=prefetch_factor,
-                             in_order=True)
-
-
-    return test_loader, val_loader, train_loader
+class CustomLoader(AffinityMixin, DataLoader):
+    def __init__(self, data, *args, **kwargs):
+        super().__init__(data, *args, **kwargs)
+        self.data = data

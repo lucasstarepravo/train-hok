@@ -3,7 +3,7 @@ import numpy as np
 from torch import Tensor
 import torch
 import logging
-from torch_geometric.nn.aggr import SumAggregation
+
 
 logger = logging.getLogger(__name__)
 
@@ -27,36 +27,23 @@ def monomial_power(polynomial):
     monomial_exponent = []
     for total_polynomial in range(1, polynomial + 1):
         for i in range(total_polynomial + 1):
-            monomial_exponent.append((total_polynomial - i, i))
+            monomial_exponent.append([total_polynomial - i, i])
     # Convert list of tuples to a PyTorch tensor
-    return monomial_exponent # torch.tensor(monomial_exponent, dtype=torch.long, device=device)
+    return np.array(monomial_exponent) # torch.tensor(monomial_exponent, dtype=torch.long, device=device)
 
 
-def calc_moments_torch(inputs, outputs, batch, approximation_order=2):
-    mon_power = monomial_power(approximation_order)
-    monomial = []
+def calc_moments_torch(inputs, outputs, batch, mon_power, inv_factorial, sum_aggr):
 
-    for power_x, power_y in mon_power:
-        inv_factorial = 1.0 / (math.factorial(power_x) * math.factorial(power_y))
-        monomial_term = inv_factorial * (inputs[:, 0] ** power_x * inputs[:, 1] ** power_y)
+    monomial = inv_factorial * ((inputs[:, 0, None] ** mon_power[0, :][None, :]) *
+                                (inputs[:, 1, None] ** mon_power[1, :][None, :]))
 
-        monomial.append(monomial_term)
+    weighted = monomial * outputs # (P, B)
 
-    mon = torch.stack(monomial)  # ensure shape (P, B)
-    batch = batch.to(torch.long)
-    outs = outputs.squeeze(1)  # (B,)
+    max_b = batch[-1] + 1
 
-    weighted = mon * outs.unsqueeze(0)  # (P, B)
+    moments = sum_aggr(x=weighted, index=batch, dim=0, dim_size=int(max_b))
 
-    sum_aggr = SumAggregation()
-    mm = []
-
-    for i in range(mon.shape[0]):
-        mm.append(sum_aggr(x=weighted[i, :], index=batch, dim=0))
-
-    moments = torch.stack(mm)
-
-    return moments
+    return moments.T
 
 # below used to compute the moments during the test inference
 def calc_moments_test(inputs, outputs, approximation_order=2):

@@ -25,7 +25,7 @@ def plot_training_pytorch(history, log_x=False, log_y=False):
     epochs = range(1, len(training_losses) + 1)
 
     # Create the plot
-    plt.figure()
+    plt.figure(figsize=(10, 4))
     plt.plot(epochs, training_losses, 'b', label='Training Loss')
     plt.plot(epochs, validation_losses, 'r', label='Validation Loss')
 
