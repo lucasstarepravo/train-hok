@@ -9,6 +9,7 @@ import pickle as pk
 import logging
 from models.MessageGNN import MessagePassingGNN
 from models.AttentionGNN import AMessagePassingGNN
+from models.SNA_GNN import SNAMessagePassingGNN
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -28,8 +29,8 @@ def load_gnn(model_path=None,
                        map_location='cpu',
                        weights_only=False)
 
-    if model_class.lower() not in ['gnn', 'a_gnn']:
-        raise ValueError("model_class must be 'gnn', or 'a_gnn' ")
+    if model_class.lower() not in ['gnn', 'a_gnn', 'sa_gnn']:
+        raise ValueError("model_class must be 'gnn', 'sa_gnn', or 'a_gnn' ")
 
     layers = attrs['layers']
     embedding_size = attrs['embedding_size']
@@ -37,8 +38,11 @@ def load_gnn(model_path=None,
     if model_class.lower() == 'gnn':
         model_instance = MessagePassingGNN(embedding_size=embedding_size,
                                            layers=layers)
-    else:
+    elif model_class.lower() == 'a_gnn':
         model_instance = AMessagePassingGNN(embedding_size=embedding_size,
+                                           layers=layers)
+    elif model_class.lower() == 'sa_gnn':
+        model_instance = SNAMessagePassingGNN(embedding_size=embedding_size,
                                            layers=layers)
 
     weight_dict = OrderedDict()
