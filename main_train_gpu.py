@@ -195,8 +195,8 @@ def train_model(model_id: int,
 
     #lr_info   = LRScheduler(optimizer=optimizer)
     scheduler = ReduceLROnPlateau(optimizer=optimizer,
-                                  patience=10,
-                                  factor=0.5,
+                                  patience=13,
+                                  factor=0.4,
                                   cooldown=2,
                                   eps=1e-12)
 
@@ -214,7 +214,7 @@ def train_model(model_id: int,
         raise ValueError("derivative must be either 'laplace', 'x', or 'y'")
 
     # Pre-computing data that will be used to compute the moments
-    target_moments = target_moments.expand(-1, batch_size).to(device=device) # could use .expand here to save memory
+    target_moments = target_moments.expand(-1, batch_size).to(device=device)
 
     mon_power = monomial_power(approximation_order)
     inv_factorial = 1 / (factorial(mon_power[:, 0]) * factorial(mon_power[:, 1]))
@@ -236,7 +236,6 @@ def train_model(model_id: int,
             for num_batches, batch in enumerate(train_loader):
 
                 batch = batch.to(device, non_blocking=True) # evaluate where stream synchronisation must happen now
-
 
                 optimizer.zero_grad()
 
@@ -286,7 +285,7 @@ def train_model(model_id: int,
 
                     val_loss = F.mse_loss(target_moments, pred_m)
 
-                    total_loss += val_loss.detach()
+                    total_loss += val_loss#.detach()
 
                 val_loss = total_loss / num_batches
 
@@ -355,17 +354,17 @@ if __name__=='__main__':
     # numactl -C 4-7 --localalloc python3 main_train_gpu.py
     cpu_cores   = 4                                        # number of cpu cores to load data for gpu
     batch_size  = 1024                                      #
-    prefetch_factor = 10                                    # number of batches for cpu to prefetch
-    model_id    = 19                                      # id of the model to save
+    prefetch_factor = 20                                    # number of batches for cpu to prefetch
+    model_id    = 22                                      # id of the model to save
     epochs      = 1000                                      # total of number of epochs to run
     lr          = 1e-4                                   # learning rate
     input_size  = 2                                        # 2 dimensional input
     layers      = 3                                        # num of gnn layers
     embedding_size = 128                                    # embedding size
     data_iteration = 4                                     # which original data iteration to use
-    checkpoint_p_epoch = 100                                # every how many epochs to save checkpoint
+    checkpoint_p_epoch = 25                                # every how many epochs to save checkpoint
     approximation_order = 3                                # order of approximation for loss moments
-    continue_train_model = 'saved_models/checkpoint/attrs19_epoch100.pth'                              # set to checked model full path to resume training # saved_models/checkpoint/attrs14_epoch580.pth
+    continue_train_model = 'saved_models/checkpoint/attrs22_epoch373.pth'                              # set to checked model full path to resume training # saved_models/checkpoint/attrs14_epoch580.pth
                                                            # leave empty string above if new model is being trained
     load_weights       = False                             # set to true if data has weights
     derivative         = 'x'                               # the differential operator the gnn will learn ('x', 'y', or 'laplace')
@@ -377,7 +376,7 @@ if __name__=='__main__':
     mem_or_disk        = 'disk'                            # dataset to be placed on RAM or disk (either 'mem' or 'disk')
     data_augmentation  = True                              # does 180-degree rotation in stencils
 
-    train = True                                          # set train=false and plot=True to only visualise training loss
+    train = False                                          # set train=false and plot=True to only visualise training loss
     plot  = True
 
     f_path = jn(base_path, f'iter{data_iteration}')
