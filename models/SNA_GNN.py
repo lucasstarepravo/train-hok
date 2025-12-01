@@ -2,6 +2,7 @@ from typing import Optional
 import torch
 from torch import nn, Tensor
 from torch_geometric.nn import MessagePassing, GraphNorm
+from torch.nn import LayerNorm
 from torch_geometric.nn.aggr import SumAggregation, AttentionalAggregation
 import logging
 import copy
@@ -27,7 +28,14 @@ class GraphLayer(MessagePassing):
 
         self.attention_mlp = nn.Sequential(
                 nn.Linear(embedding_size, embedding_size),
-                nn.Tanh())
+                nn.Tanh(),
+                
+                nn.Linear(embedding_size, embedding_size),
+                nn.Tanh(),
+                
+                nn.Linear(embedding_size, embedding_size),
+                nn.Tanh()
+        )
         reset_params(self.attention_mlp, 'tanh')
 
         self.attention_aggr = AttentionalAggregation(nn.Sequential(
@@ -38,8 +46,13 @@ class GraphLayer(MessagePassing):
         self.mlp_msg = nn.Sequential(
             nn.Linear(2 * embedding_size, embedding_size),
             nn.Tanh(),
+            
             nn.Linear(embedding_size, embedding_size),
-            nn.Tanh()
+            nn.Tanh(),
+            
+            nn.Linear(embedding_size, embedding_size),
+            nn.Tanh(),
+
         )
 
         reset_params(self.mlp_msg, 'tanh')
@@ -47,10 +60,18 @@ class GraphLayer(MessagePassing):
         self.mlp_upd = nn.Sequential(
             nn.Linear(2 * embedding_size, embedding_size),
             nn.Tanh(),
+            
+            nn.Linear(embedding_size, embedding_size),
+            nn.Tanh(),
+            
             nn.Linear(embedding_size, embedding_size),
             nn.Tanh()
+
         )
         reset_params(self.mlp_upd, 'tanh')
+
+        self.node_norm = LayerNorm(embedding_size)
+        self.edge_norm = LayerNorm(embedding_size)
 
         #self.aggr_m = SumAggregation()
 
@@ -108,8 +129,8 @@ class GraphLayer(MessagePassing):
         return mes
 
     def update(self, aggr, node_feature, batch) -> Tensor:
-        aggr_msg = aggr[0]
-        edge_upd = aggr[1]
+        aggr_msg = self.node_norm(aggr[0])
+        edge_upd = self.edge_norm(aggr[1])
 
         msg_to_upd = torch.cat((node_feature, aggr_msg), dim=1)
         node_feature_out = self.mlp_upd(msg_to_upd)
@@ -127,7 +148,9 @@ class SNAMessagePassingGNN(nn.Module):
         self.embedding_size = embedding_size
 
         self.node_encoder  = nn.Sequential(
-            nn.Linear(1, embedding_size),
+            nn.Linear(1, embedding_size//2),
+            nn.Tanh(),
+            nn.Linear(embedding_size//2, embedding_size),
             nn.Tanh()
         )
         reset_params(self.node_encoder, 'tanh')
@@ -146,14 +169,13 @@ class SNAMessagePassingGNN(nn.Module):
 
         self.decoder1 = nn.Sequential(
             nn.Linear(embedding_size, embedding_size// 2),
+            nn.Tanh(),
+            nn.Linear(embedding_size // 2, embedding_size // 4),
             nn.Tanh()
         )
         reset_params(self.decoder1, 'Tanh')
 
-        self.decoder2 = nn.Sequential(
-            nn.Linear(embedding_size // 2,   embedding_size // 4),
-            nn.Tanh(),
-            nn.Linear(embedding_size // 4,  1))
+        self.decoder2 = nn.Sequential(nn.Linear(embedding_size // 4,  1))
 
     def forward(self,
                 node_feature: Tensor,
