@@ -25,7 +25,7 @@ torch.backends.cudnn.allow_tf32 = True
 if __name__ == '__main__':
     #will need to adapt to new directories
     world_size = 1  # torch.cuda.device_count()
-    cpu_cores   = 8
+    cpu_cores   = 4                             # if change the cpu_cores, change the affinity in gnn_infer.infer
     batch_size  = 2**12
     prefetch_factor = 5
     model_id    = 14
@@ -35,7 +35,7 @@ if __name__ == '__main__':
     derivative  = 'x'
     model_path  = jn(model_path, derivative)
     mem_or_disk = 'disk'
-    full_path   = 'saved_models/checkpoint/attrs14_epoch489.pth'
+    full_path   = 'saved_models/checkpoint/attrs20_epoch1899.pth'
     data_iteration = 4
     data_augmentation = False
     embedding_size = 128
@@ -78,36 +78,17 @@ if __name__ == '__main__':
 
     logger.info('Starting inference')
 
-    pred = infer(model = model,
-                 loader = test_loader)
+    weights, moments_err, moments_std = infer(model = model,
+                                                loader = test_loader,
+                                                approximation_order=approximation_order,
+                                                derivative=derivative,
+                                                batch_size=batch_size)
 
-    logger.info('Computing moments')
-
-    pred_moments = calc_moments_test(distances[test_idx],
-                                     pred,
-                                     approximation_order=approximation_order)
-
-
-    n = int((approximation_order ** 2 + 3 * approximation_order) / 2)
-    target_moments = np.zeros((n, 1), dtype=np.float32)
-    if derivative == 'laplace':
-        target_moments[2] = 1.0
-        target_moments[4] = 1.0
-    elif derivative == 'x':
-        target_moments[0] = 1.0
-    elif derivative == 'y':
-        target_moments[1] = 1.0
-    else:
-        raise ValueError("derivative must be either 'laplace', 'x', or 'y'")
-
-    err_norm = np.abs(pred_moments - target_moments)
-    gnn_mean_err_norm = np.mean(err_norm, axis=1)
-    gnn_std = np.std(pred_moments - target_moments, axis=1)
-    print('moments error: ', gnn_mean_err_norm)
-    print('moments std dev: ', gnn_std)
+    print('moments error: ', moments_err)
+    print('moments std dev: ', moments_std)
 
     if plot:
-        plot_kernel(distances[test_idx], pred, alpha=1)
+        plot_kernel(distances[test_idx], weights, alpha=1)
 
 
     # visualise results
