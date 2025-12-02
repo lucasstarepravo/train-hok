@@ -241,7 +241,6 @@ def train_model(model_id: int,
 
                 out = model(batch.x,
                             batch.edge_index,
-                            batch.edge_attr,
                             batch.batch)
 
                 pred_m = calc_moments_torch(batch.distances,
@@ -273,7 +272,6 @@ def train_model(model_id: int,
                     batch = batch.to(device, non_blocking=True)
                     out = model(batch.x,
                                 batch.edge_index,
-                                batch.edge_attr,
                                 batch.batch)
 
                     pred_m = calc_moments_torch(batch.distances,
@@ -353,18 +351,18 @@ if __name__=='__main__':
     # to isolate the host and the cores used for dataloader run the code with
     # numactl -C 4-7 --localalloc python3 main_train_gpu.py
     cpu_cores   = 4                                        # number of cpu cores to load data for gpu
-    batch_size  = 1024                                      #
-    prefetch_factor = 20                                    # number of batches for cpu to prefetch
-    model_id    = 22                                      # id of the model to save
+    batch_size  = 256                                      #
+    prefetch_factor = 5                                    # number of batches for cpu to prefetch
+    model_id    = 23                                      # id of the model to save
     epochs      = 1000                                      # total of number of epochs to run
-    lr          = 1e-4                                   # learning rate
+    lr          = 0.5*1e-4                                   # learning rate
     input_size  = 2                                        # 2 dimensional input
-    layers      = 3                                        # num of gnn layers
+    layers      = 2                                        # num of gnn layers
     embedding_size = 128                                    # embedding size
-    data_iteration = 4                                     # which original data iteration to use
+    data_iteration = 3                                     # which original data iteration to use
     checkpoint_p_epoch = 25                                # every how many epochs to save checkpoint
     approximation_order = 3                                # order of approximation for loss moments
-    continue_train_model = 'saved_models/checkpoint/attrs22_epoch373.pth'                              # set to checked model full path to resume training # saved_models/checkpoint/attrs14_epoch580.pth
+    continue_train_model = 'saved_models/checkpoint/attrs23_epoch47.pth'                              # set to checked model full path to resume training # saved_models/checkpoint/attrs14_epoch580.pth saved_models/checkpoint/attrs23_epoch25.pth
                                                            # leave empty string above if new model is being trained
     load_weights       = False                             # set to true if data has weights
     derivative         = 'x'                               # the differential operator the gnn will learn ('x', 'y', or 'laplace')
@@ -417,18 +415,15 @@ if __name__=='__main__':
                            weights_only=False)
         h = {'history': (attrs['train_history'], attrs['val_history'])}
         plot_training_pytorch(h, log_x=True, log_y=True)
-        print(f'Model Summary: \n'
-              f'best_val_loss: {attrs['best_val_loss']}\n'
-              f'Max epoch: {attrs['epochs']}\n'
-              f'Batch size: {attrs['batch_size']}\n'
-              f'Layers: {attrs['layers']}\n'
-              f'Embedding size: {attrs['embedding_size']}\n'
-              f'Approx order: {attrs['approximation_order']}\n'
-              f'Model ID: {attrs['model_id']}')
-
-
-
-
-
+        print(
+            f"Model Summary:\n"
+            f"best_val_loss: {attrs['best_val_loss']}\n"
+            f"Max epoch: {attrs['epochs']}\n"
+            f"Batch size: {attrs['batch_size']}\n"
+            f"Layers: {attrs['layers']}\n"
+            f"Embedding size: {attrs['embedding_size']}\n"
+            f"Approx order: {attrs['approximation_order']}\n"
+            f"Model ID: {attrs['model_id']}"
+        )
 
         # write and call training plot function

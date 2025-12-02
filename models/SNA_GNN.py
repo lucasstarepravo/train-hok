@@ -44,7 +44,7 @@ class GraphLayer(MessagePassing):
             )
 
         self.mlp_msg = nn.Sequential(
-            nn.Linear(2 * embedding_size, embedding_size),
+            nn.Linear(embedding_size, embedding_size),
             nn.Tanh(),
             
             nn.Linear(embedding_size, embedding_size),
@@ -71,7 +71,6 @@ class GraphLayer(MessagePassing):
         reset_params(self.mlp_upd, 'tanh')
 
         self.node_norm = LayerNorm(embedding_size)
-        self.edge_norm = LayerNorm(embedding_size)
 
         #self.aggr_m = SumAggregation()
 
@@ -81,7 +80,6 @@ class GraphLayer(MessagePassing):
     def forward(self,
                 node_feature: Tensor,
                 edge_index: Tensor,
-                edge_feature: Tensor,
                 batch: Tensor) -> Tensor:
         # x has shape [N, in_channels]
         # edge_index has shape [2, E]
@@ -97,7 +95,6 @@ class GraphLayer(MessagePassing):
 
         return self.propagate(edge_index,
                               node_feature=node_feature,
-                              edge_feature=edge_feature,
                               batch=batch)
 
     def aggregate(self,
@@ -108,34 +105,32 @@ class GraphLayer(MessagePassing):
         #aggregated = self.aggr_m(x=mes,
         #                         index=index)
 
-        return aggregated, mes
+        return aggregated#, mes
 
 
-    def message(self, node_feature_i, node_feature_j, edge_feature, batch):
+    def message(self, node_feature_i, node_feature_j, batch):
         # x_i has shape [E, in_channels]
         # x_j has shape [E, in_channels]
         """
         Constructs messages to node i
-        :param edge_feature:
         :param node_feature_j:
         :param node_feature_i:
         :return:
         """
         # Use below if there are edge attributes
         #m = torch.cat([node_feature_i, node_feature_j, edge_feature[:,0:1]], dim=1)
-        m = torch.cat((node_feature_j, edge_feature), dim=1)
-        mes = self.mlp_msg(m)
+        mes = self.mlp_msg(node_feature_j)
 
         return mes
 
     def update(self, aggr, node_feature, batch) -> Tensor:
-        aggr_msg = self.node_norm(aggr[0])
-        edge_upd = self.edge_norm(aggr[1])
+        aggr_msg = self.node_norm(aggr)
+        #edge_upd = self.edge_norm(aggr[1])
 
         msg_to_upd = torch.cat((node_feature, aggr_msg), dim=1)
         node_feature_out = self.mlp_upd(msg_to_upd)
 
-        return node_feature_out, edge_upd
+        return node_feature_out#, edge_upd
 
 
 class SNAMessagePassingGNN(nn.Module):
@@ -148,18 +143,18 @@ class SNAMessagePassingGNN(nn.Module):
         self.embedding_size = embedding_size
 
         self.node_encoder  = nn.Sequential(
-            nn.Linear(1, embedding_size//2),
+            nn.Linear(2, embedding_size//2),
             nn.Tanh(),
             nn.Linear(embedding_size//2, embedding_size),
             nn.Tanh()
         )
         reset_params(self.node_encoder, 'tanh')
 
-        self.edge_encoder = nn.Sequential(
-            nn.Linear(input_size, embedding_size),
-            nn.Tanh()
-        )
-        reset_params(self.edge_encoder, 'tanh')
+        #self.edge_encoder = nn.Sequential(
+        #    nn.Linear(input_size, embedding_size),
+        #    nn.Tanh()
+        #)
+        #reset_params(self.edge_encoder, 'tanh')
 
         graph_layers = []
         for _ in range(layers):
@@ -180,17 +175,16 @@ class SNAMessagePassingGNN(nn.Module):
     def forward(self,
                 node_feature: Tensor,
                 edge_index: Tensor,
-                edge_feature: Tensor,
                 batch: Tensor):
 
-        emb_edge_feature = self.edge_encoder(edge_feature)
+        #emb_edge_feature = self.edge_encoder(edge_feature)
 
         emb_node_feature = self.node_encoder(node_feature)
 
         # do embedding for edge attributes
         for layer in self.graph_layers:
             # edge embeddings and node embeddings are updated
-            emb_node_feature, emb_edge_feature = layer(emb_node_feature, edge_index, emb_edge_feature, batch)
+            emb_node_feature = layer(emb_node_feature, edge_index, batch)
 
 
         out = self.decoder1(emb_node_feature)
