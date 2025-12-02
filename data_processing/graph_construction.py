@@ -28,9 +28,7 @@ class OnDiskStencilGraph(OnDiskDataset):
 
         self.features  = np.ascontiguousarray(features).astype(np.float32, copy=False)
 
-
         self.total_datapoints = features.shape[0] * 2 if data_augmentation else features.shape[0]
-
 
         self.data_aug_tuple = (1, -1) if data_augmentation else (1,)
 
@@ -39,15 +37,18 @@ class OnDiskStencilGraph(OnDiskDataset):
         #self.transform_my_class = ToUndirected()
 
         # prebuild once
-        self.edges_max = torch.tensor(
-            [[i, 0] for i in range(1, self.max_neighbours)],
-            dtype=torch.long).T
+        ls = []
+        for i in range(self.max_neighbours):
+            for j in range(self.max_neighbours):
+                if i == j: continue
+                ls.append([i,j])
+
+        self.edges_max = torch.tensor(ls, dtype=torch.long).T
 
         self.schema = {
-            'x': dict(dtype=torch.float32, size=(-1,1)),
+            'x': dict(dtype=torch.float32, size=(-1,2)),
             'distances': dict(dtype=torch.float32, size=(-1,2)),
-            'edge_index': dict(dtype=torch.long, size=(2,-1)),
-            'edge_attr': dict(dtype=torch.float32, size=(-1,2))
+            'edge_index': dict(dtype=torch.long, size=(2,-1))
         }
 
         #self.transform = ToUndirected()
@@ -65,15 +66,14 @@ class OnDiskStencilGraph(OnDiskDataset):
         return {
             "x": data['x'],
             "distances": data['distances'],
-            "edge_index": data['edge_index'],
-            "edge_attr": data['edge_attr'],
+            "edge_index": data['edge_index']
         }
 
     def deserialize(self, data: Any) -> BaseData:
         return  Data(x=data['x'],
                      distances=data['distances'],
-                     edge_index=data['edge_index'],
-                     edge_attr= data['edge_attr'])
+                     edge_index=data['edge_index']
+                     )
 
 
     def len(self) -> int:
@@ -93,31 +93,32 @@ class OnDiskStencilGraph(OnDiskDataset):
 
             #num_neigh = self.distances[d_idx, 1:, 0][torch.isfinite(self.distances[d_idx, 1:, 0])]
             # removing the distance of the central node to itself (0.0)
-            edge_attr = self.features[idx, 1:, :]
-            distances = torch.from_numpy(self.features[idx, ...].copy()).to(torch.float32)
+            #edge_attr = self.features[idx, 1:, :]
+            #distances = torch.from_numpy(self.features[idx, ...].copy()).to(torch.float32)
 
             # creating edge attributes
             # (distance from neighbour points to central point, and from central point to neighbour points)
-            edge_attr = torch.from_numpy(edge_attr.copy()).to(torch.float32)
-            rev_edge_attr = -edge_attr
-            edge_attr = torch.concat((edge_attr, rev_edge_attr))
+            #edge_attr = torch.from_numpy(edge_attr.copy()).to(torch.float32)
+            #rev_edge_attr = -edge_attr
+            #edge_attr = torch.concat((edge_attr, rev_edge_attr))
 
             # slice down to actual degree
-            num_neigh = edge_attr.shape[0]
-            edge_index = self.edges_max[:, :num_neigh].long()
+            #num_neigh = edge_attr.shape[0]
+            edge_index = self.edges_max#[:, :num_neigh].long()
             tmp = [1,0]
-            rev_edge_index = edge_index[tmp, :]
-            edge_index = torch.concat((edge_index, rev_edge_index), dim=1)
+            x = torch.from_numpy(self.features[idx].copy()).to(torch.float32)
+            distances = torch.from_numpy(self.features[idx, ...].copy()).to(torch.float32)
+            #rev_edge_index = edge_index[tmp, :]
+            #edge_index = torch.concat((edge_index, rev_edge_index), dim=1)
 
-            x = torch.ones((self.features[idx, ...].shape[0], 1), dtype=torch.float32)
-            x[0] = 1/(x.shape[0]**.5) # setting the initialisation of the node attribute to be 1/degree[i]**.5
+            #x = torch.ones((self.features[idx, ...].shape[0], 1), dtype=torch.float32)
+            #x[0] = 1/(x.shape[0]**.5) # setting the initialisation of the node attribute to be 1/degree[i]**.5
 
 
             data_dict = {
                         'x': x,
                         'distances': distances,
-                        'edge_index': edge_index,
-                        'edge_attr': edge_attr
+                        'edge_index': edge_index
             }
 
 
