@@ -38,7 +38,7 @@ def import_parallel(data_path: str,
         distances   = distances[:, :max_neighbours, :]
         r_distances = (distances[..., 0] ** 2 + distances[..., 1] ** 2) ** .5
         max_r       = np.max(r_distances, axis=1)
-        distances   = distances / (0.5 * max_r[..., None, None])
+        distances   = distances / (max_r[..., None, None])
 
     if plot_stencils:
         plot_kernel(distances)
