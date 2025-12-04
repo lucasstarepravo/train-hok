@@ -38,7 +38,7 @@ def import_parallel(data_path: str,
         distances   = distances[:, :max_neighbours, :]
         r_distances = (distances[..., 0] ** 2 + distances[..., 1] ** 2) ** .5
         max_r       = np.max(r_distances, axis=1)
-        distances   = distances / max_r[..., None, None]
+        distances   = distances / (0.5 * max_r[..., None, None])
 
     if plot_stencils:
         plot_kernel(distances)
@@ -233,13 +233,13 @@ if __name__ == '__main__':
     # This routine doesn't use h, it normalises the distance and wrt the maximum distance of the neighbours
     data_path         = './fortran_data'
     data_iteration    = 4
-    n_cores           = 5
+    n_cores           = 4
     derivative        = 'x'
     load_weights      = False
     parallel          = True
     root              = 'preproc_data_no_w'
     data_augmentation = False
-    max_neighbours    = None
+    max_neighbours    = 1000
     plot_stencil      = False
 
     test_root  = os.path.join(root, 'test_graphs')
