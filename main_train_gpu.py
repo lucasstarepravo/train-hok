@@ -10,7 +10,7 @@ from torch_geometric.loader import DataLoader
 from numpy.typing import NDArray
 from typing import Optional
 from data_processing.graph_construction import OnDiskStencilGraph, InMemoryStencilGraph, CustomLoader
-from torch.optim.lr_scheduler import ReduceLROnPlateau, LRScheduler
+from torch.optim.lr_scheduler import ReduceLROnPlateau, LinearLR
 from torch.profiler import profile, ProfilerActivity, record_function, schedule, tensorboard_trace_handler
 from Plots import plot_training_pytorch
 from data_processing.gnn_preproc import load
@@ -41,6 +41,7 @@ def construct_data_loader(cpu_cores: int,
                           distances: NDArray,
                           embedding_size: int,
                           prefetch_factor: int,
+                          dense_graph: bool,
                           mem_or_disk: str = 'mem',
                           root: Optional[str] = '',
                           data_augmentation: bool = False):
@@ -61,19 +62,22 @@ def construct_data_loader(cpu_cores: int,
 
     logger.info('Creating graphs')
     test_ds = graph_class(features=distances[test_idx] if distances is not None else None,
-                                   embedding_size=embedding_size,
-                                   root=test_root,
-                                   data_augmentation=data_augmentation)
+                           embedding_size=embedding_size,
+                           root=test_root,
+                           data_augmentation=data_augmentation,
+                          dense_graph=dense_graph)
 
     val_ds = graph_class(features=distances[val_idx] if distances is not None else None,
-                                   embedding_size=embedding_size,
-                                   root=val_root,
-                                  data_augmentation=data_augmentation)
+                           embedding_size=embedding_size,
+                           root=val_root,
+                          data_augmentation=data_augmentation,
+                          dense_graph=dense_graph)
 
     train_ds = graph_class(features=distances[train_idx] if distances is not None else None,
-                                   embedding_size=embedding_size,
-                                   root=train_root,
-                                    data_augmentation=data_augmentation)
+                           embedding_size=embedding_size,
+                           root=train_root,
+                            data_augmentation=data_augmentation,
+                          dense_graph=dense_graph)
 
     logger.info('Creating data loader')
     test_loader = CustomLoader(test_ds,
@@ -133,7 +137,7 @@ def train_model(model_id: int,
 
     print(f"PID: {os.getpid()} started.")
 
-    torch.manual_seed(1222)
+    #torch.manual_seed(1222)
 
     # if we are resuming training load model and optimiser
 
@@ -194,11 +198,12 @@ def train_model(model_id: int,
         resume_epoch = 0
 
     #lr_info   = LRScheduler(optimizer=optimizer)
-    scheduler = ReduceLROnPlateau(optimizer=optimizer,
-                                  patience=13,
-                                  factor=0.4,
-                                  cooldown=2,
-                                  eps=1e-12)
+    linear_scheduler = LinearLR(optimizer, start_factor=0.1, total_iters=100)
+    plateau_scheduler = ReduceLROnPlateau(optimizer=optimizer,
+                                          patience=20,
+                                          factor=0.4,
+                                          cooldown=2,
+                                          eps=1e-12)
 
 
     n = int((approximation_order ** 2 + 3 * approximation_order) / 2)
@@ -223,6 +228,9 @@ def train_model(model_id: int,
     sum_aggr = SumAggregation().to(device=device)
 
     model.compile()
+    allowed = sorted(os.sched_getaffinity(0))
+    workers = allowed[:cpu_cores]
+    logger.info('Entering training loop')
 
     for epoch in range(1, epochs + 1):
         t0 = time.perf_counter()
@@ -231,7 +239,7 @@ def train_model(model_id: int,
 
         total_loss = torch.tensor(0.0, device=device)
 
-        with train_loader.enable_cpu_affinity(loader_cores=[0, 1, 2, 3]):
+        with train_loader.enable_cpu_affinity(loader_cores=workers):
 
             for num_batches, batch in enumerate(train_loader):
 
@@ -243,7 +251,7 @@ def train_model(model_id: int,
                             batch.edge_index,
                             batch.batch)
 
-                pred_m = calc_moments_torch(batch.distances,
+                pred_m = calc_moments_torch(batch.x,
                                             out,
                                             batch.batch,
                                             mon_power,
@@ -266,7 +274,7 @@ def train_model(model_id: int,
         total_loss = torch.tensor(0.0, device=device)
         num_batches = 0
         with torch.no_grad():
-            with val_loader.enable_cpu_affinity(loader_cores=[0, 1, 2, 3]):
+            with val_loader.enable_cpu_affinity(loader_cores=workers):
                 for batch in val_loader:
                     num_batches += 1
                     batch = batch.to(device, non_blocking=True)
@@ -274,7 +282,7 @@ def train_model(model_id: int,
                                 batch.edge_index,
                                 batch.batch)
 
-                    pred_m = calc_moments_torch(batch.distances,
+                    pred_m = calc_moments_torch(batch.x,
                                                 out,
                                                 batch.batch,
                                                 mon_power,
@@ -299,11 +307,12 @@ def train_model(model_id: int,
 
         elapsed = time.perf_counter() - t0
         e = epoch + resume_epoch
-        print(f'Epoch {e:3d} — Train Loss: {train_loss:.5e} || Val Loss: {val_loss:.5e} || '
+        logger.info(f'Epoch {e:3d} — Train Loss: {train_loss:.5e} || Val Loss: {val_loss:.5e} || '
               f'time per epoch: {elapsed:.3f}s')
 
-        # The scheduler step must be broadcasted to other GPUs
-        scheduler.step(val_loss)
+        # The scheduler step is purposely taken with the training loss
+        plateau_scheduler.step(train_loss)
+        linear_scheduler.step()
 
         if epoch % checkpoint_p_epoch == 0:
             save_dict = {'train_history' : train_history,
@@ -350,19 +359,19 @@ def train_model(model_id: int,
 if __name__=='__main__':
     # to isolate the host and the cores used for dataloader run the code with
     # numactl -C 4-7 --localalloc python3 main_train_gpu.py
-    cpu_cores   = 4                                        # number of cpu cores to load data for gpu
-    batch_size  = 256                                      #
-    prefetch_factor = 5                                    # number of batches for cpu to prefetch
-    model_id    = 23                                      # id of the model to save
-    epochs      = 1000                                      # total of number of epochs to run
-    lr          = 0.5*1e-4                                   # learning rate
+    cpu_cores   = 5                                        # number of cpu cores to load data for gpu
+    batch_size  = 512                                      #
+    prefetch_factor = 10                                    # number of batches for cpu to prefetch
+    model_id    = 28                                      # id of the model to save
+    epochs      = 2000                                      # total of number of epochs to run
+    lr          = 1e-5                                   # learning rate
     input_size  = 2                                        # 2 dimensional input
-    layers      = 2                                        # num of gnn layers
-    embedding_size = 128                                    # embedding size
-    data_iteration = 3                                     # which original data iteration to use
-    checkpoint_p_epoch = 25                                # every how many epochs to save checkpoint
-    approximation_order = 3                                # order of approximation for loss moments
-    continue_train_model = 'saved_models/checkpoint/attrs23_epoch47.pth'                              # set to checked model full path to resume training # saved_models/checkpoint/attrs14_epoch580.pth saved_models/checkpoint/attrs23_epoch25.pth
+    layers      = 3                                        # num of gnn layers
+    embedding_size = 256                                    # embedding size
+    data_iteration = 5                                     # which original data iteration to use
+    checkpoint_p_epoch = 100                                # every how many epochs to save checkpoint
+    approximation_order = 2                                # order of approximation for loss moments
+    continue_train_model = ''                              # set to checked model full path to resume training # saved_models/checkpoint/attrs14_epoch580.pth saved_models/checkpoint/attrs23_epoch25.pth
                                                            # leave empty string above if new model is being trained
     load_weights       = False                             # set to true if data has weights
     derivative         = 'x'                               # the differential operator the gnn will learn ('x', 'y', or 'laplace')
@@ -373,8 +382,9 @@ if __name__=='__main__':
     base_path          = 'preproc_data_no_w'               # root dir to get imported preproc data
     mem_or_disk        = 'disk'                            # dataset to be placed on RAM or disk (either 'mem' or 'disk')
     data_augmentation  = True                              # does 180-degree rotation in stencils
+    dense_graph        = False                             # if all graph nodes are connected to each other or only to central node
 
-    train = False                                          # set train=false and plot=True to only visualise training loss
+    train = False                                         # set train=False and plot=True to only visualise training loss
     plot  = True
 
     f_path = jn(base_path, f'iter{data_iteration}')
@@ -399,13 +409,26 @@ if __name__=='__main__':
                                                prefetch_factor=prefetch_factor,
                                                root=root_dir_graphs,
                                                data_augmentation=data_augmentation,
-                                               mem_or_disk=mem_or_disk)
+                                               mem_or_disk=mem_or_disk,
+                                               dense_graph=dense_graph)
 
         os.makedirs(out_path, exist_ok=True)
         os.makedirs(checkpoint_path, exist_ok=True)
-        train_model(model_id, epochs, input_size, embedding_size, layers, lr, out_path,
-                    train_loader, val_loader, batch_size, derivative, checkpoint_p_epoch, checkpoint_path,
-                    approximation_order, continue_train_model)
+        train_model(model_id,
+                    epochs,
+                    input_size,
+                    embedding_size,
+                    layers,
+                    lr,
+                    out_path,
+                    train_loader,
+                    val_loader,
+                    batch_size,
+                    derivative,
+                    checkpoint_p_epoch,
+                    checkpoint_path,
+                    approximation_order,
+                    continue_train_model)
 
 
     if plot:
