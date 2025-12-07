@@ -116,6 +116,7 @@ def construct_data_loader(cpu_cores: int,
 def train_model(model_id: int,
                 epochs: int,
                 input_size: int,
+                output_size: int,
                 embedding_size: int,
                 layers: list | int,
                 lr: float,
@@ -154,9 +155,11 @@ def train_model(model_id: int,
 
         #model = AMessagePassingGNN(embedding_size=embedding_size,
         #                          layers=layers)
+        # still need to implement number of kernels when resuming training
         model = SNAMessagePassingGNN(input_size=input_size,
                                      embedding_size=embedding_size,
-                                    layers=layers).to(device)
+                                    layers=layers,
+                                     output_size=output_size).to(device)
 
 
         weight_dict = OrderedDict()
@@ -187,6 +190,7 @@ def train_model(model_id: int,
         #                            embedding_size=embedding_size,
         #                            layers=layers).to(device)
         model = SNAMessagePassingGNN(input_size=input_size,
+                                     output_size=output_size,
                                      embedding_size=embedding_size,
                                     layers=layers).to(device)
 
@@ -198,11 +202,11 @@ def train_model(model_id: int,
         resume_epoch = 0
 
     #lr_info   = LRScheduler(optimizer=optimizer)
-    linear_scheduler = LinearLR(optimizer, start_factor=0.1, total_iters=100)
+    linear_scheduler = LinearLR(optimizer, start_factor=0.1, total_iters=10)
     plateau_scheduler = ReduceLROnPlateau(optimizer=optimizer,
-                                          patience=20,
+                                          patience=5,
                                           factor=0.4,
-                                          cooldown=2,
+                                          cooldown=6,
                                           eps=1e-12)
 
 
@@ -232,6 +236,8 @@ def train_model(model_id: int,
     workers = allowed[:cpu_cores]
     logger.info('Entering training loop')
 
+    loss_scaling = 1
+
     for epoch in range(1, epochs + 1):
         t0 = time.perf_counter()
 
@@ -259,6 +265,8 @@ def train_model(model_id: int,
                                             sum_aggr)
 
                 loss = F.mse_loss(target_moments, pred_m)
+
+                loss = loss_scaling * loss
 
                 loss.backward()
 
@@ -302,6 +310,7 @@ def train_model(model_id: int,
                     save_weights = model.state_dict()
                     save_optimizer = optimizer.state_dict()
 
+        train_loss /= loss_scaling
         train_history.append(float(train_loss))
         val_history.append(float(val_loss))
 
@@ -359,19 +368,20 @@ def train_model(model_id: int,
 if __name__=='__main__':
     # to isolate the host and the cores used for dataloader run the code with
     # numactl -C 4-7 --localalloc python3 main_train_gpu.py
-    cpu_cores   = 5                                        # number of cpu cores to load data for gpu
+    cpu_cores   = 4                                        # number of cpu cores to load data for gpu
     batch_size  = 512                                      #
     prefetch_factor = 10                                    # number of batches for cpu to prefetch
-    model_id    = 28                                      # id of the model to save
-    epochs      = 2000                                      # total of number of epochs to run
-    lr          = 1e-5                                   # learning rate
+    model_id    = 33                                      # id of the model to save
+    epochs      = 1000                                      # total of number of epochs to run
+    lr          = 1e-4                                   # learning rate
     input_size  = 2                                        # 2 dimensional input
-    layers      = 3                                        # num of gnn layers
+    output_size = 16                                        # number of kernels
+    layers      = 2                                        # num of gnn layers
     embedding_size = 256                                    # embedding size
-    data_iteration = 5                                     # which original data iteration to use
+    data_iteration = 4                                     # which original data iteration to use
     checkpoint_p_epoch = 100                                # every how many epochs to save checkpoint
-    approximation_order = 2                                # order of approximation for loss moments
-    continue_train_model = ''                              # set to checked model full path to resume training # saved_models/checkpoint/attrs14_epoch580.pth saved_models/checkpoint/attrs23_epoch25.pth
+    approximation_order = 3                                # order of approximation for loss moments
+    continue_train_model = 'saved_models/checkpoint/attrs32_epoch292.pth'                              # set to checked model full path to resume training # saved_models/checkpoint/attrs14_epoch580.pth saved_models/checkpoint/attrs23_epoch25.pth
                                                            # leave empty string above if new model is being trained
     load_weights       = False                             # set to true if data has weights
     derivative         = 'x'                               # the differential operator the gnn will learn ('x', 'y', or 'laplace')
@@ -417,6 +427,7 @@ if __name__=='__main__':
         train_model(model_id,
                     epochs,
                     input_size,
+                    output_size,
                     embedding_size,
                     layers,
                     lr,

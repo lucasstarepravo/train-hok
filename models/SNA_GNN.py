@@ -31,9 +31,6 @@ class GraphLayer(MessagePassing):
                 nn.Tanh(),
                 
                 nn.Linear(embedding_size, embedding_size),
-                nn.Tanh(),
-                
-                nn.Linear(embedding_size, embedding_size),
                 nn.Tanh()
         )
         reset_params(self.attention_mlp, 'tanh')
@@ -49,9 +46,6 @@ class GraphLayer(MessagePassing):
             
             nn.Linear(embedding_size, embedding_size),
             nn.Tanh(),
-            
-            nn.Linear(embedding_size, embedding_size),
-            nn.Tanh(),
 
         )
 
@@ -59,9 +53,6 @@ class GraphLayer(MessagePassing):
 
         self.mlp_upd = nn.Sequential(
             nn.Linear(2 * embedding_size, embedding_size),
-            nn.Tanh(),
-            
-            nn.Linear(embedding_size, embedding_size),
             nn.Tanh(),
             
             nn.Linear(embedding_size, embedding_size),
@@ -137,13 +128,14 @@ class SNAMessagePassingGNN(nn.Module):
     def __init__(self,
                  embedding_size: int,
                  layers: int,
-                 input_size = 2):
+                 input_size: int=2,
+                 output_size: int=1):
         super().__init__()
 
         self.embedding_size = embedding_size
 
         self.node_encoder  = nn.Sequential(
-            nn.Linear(2, embedding_size//2),
+            nn.Linear(input_size, embedding_size//2),
             nn.Tanh(),
             nn.Linear(embedding_size//2, embedding_size),
             nn.Tanh()
@@ -163,14 +155,18 @@ class SNAMessagePassingGNN(nn.Module):
         self.graph_layers = nn.ModuleList(graph_layers)
 
         self.decoder1 = nn.Sequential(
-            nn.Linear(embedding_size, embedding_size// 2),
+            nn.Linear(embedding_size, embedding_size),
+            nn.Tanh(),
+            nn.Linear(embedding_size, embedding_size // 2),
             nn.Tanh(),
             nn.Linear(embedding_size // 2, embedding_size // 4),
+            nn.Tanh(),
+            nn.Linear(embedding_size // 4, embedding_size // 8),
             nn.Tanh()
         )
         reset_params(self.decoder1, 'Tanh')
 
-        self.decoder2 = nn.Sequential(nn.Linear(embedding_size // 4,  1))
+        self.decoder2 = nn.Sequential(nn.Linear(embedding_size // 8,  output_size))
 
     def forward(self,
                 node_feature: Tensor,

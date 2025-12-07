@@ -37,7 +37,11 @@ def calc_moments_torch(inputs, outputs, batch, mon_power, inv_factorial, sum_agg
     monomial = inv_factorial * ((inputs[:, 0, None] ** mon_power[0, :][None, :]) *
                                 (inputs[:, 1, None] ** mon_power[1, :][None, :]))
 
+    outputs = outputs.unsqueeze(1)
+    monomial = monomial.unsqueeze(-1)
     weighted = monomial * outputs
+
+    weighted = torch.sum(weighted, dim=-1)
 
     max_b = batch[-1] + 1
 
