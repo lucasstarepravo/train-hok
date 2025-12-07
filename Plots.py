@@ -4,7 +4,7 @@ from matplotlib.ticker import ScalarFormatter
 import matplotlib.colors as mcolors
 
 
-def plot_training_pytorch(history, log_x=False, log_y=False):
+def plot_training_pytorch(history, log_x=False, log_y=False, alpha=0.7):
     """
     Plots the training and validation loss with options for logarithmic x and y axes.
 
@@ -26,8 +26,8 @@ def plot_training_pytorch(history, log_x=False, log_y=False):
 
     # Create the plot
     plt.figure(figsize=(10, 4))
-    plt.plot(epochs, training_losses, 'b', label='Training Loss')
-    plt.plot(epochs, validation_losses, 'r', label='Validation Loss')
+    plt.plot(epochs, training_losses, 'b', label='Training Loss', alpha=alpha)
+    plt.plot(epochs, validation_losses, 'r', label='Validation Loss', alpha=alpha)
 
     # Set title and labels
     plt.title('Training and Validation Loss')
