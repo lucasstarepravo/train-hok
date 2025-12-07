@@ -54,11 +54,10 @@ def infer(model,
                 batch = batch.to('cuda', non_blocking=True)
                 out = model(batch.x,
                             batch.edge_index,
-                            batch.edge_attr,
                             batch.batch)
 
                 # now predict moments and add that to output
-                pred_m = calc_moments_torch(batch.distances,
+                pred_m = calc_moments_torch(batch.x,
                                             out,
                                             batch.batch,
                                             mon_power,
