@@ -219,6 +219,11 @@ def train_model(model_id: int,
         target_moments[0] = 1.0
     elif derivative == 'y':
         target_moments[1] = 1.0
+    elif derivative == 'hyp':
+        if approximation_order != 4: raise ValueError('For hyperviscosity, operator must be 4th order')
+        target_moments[9]  = -1.0
+        target_moments[11] = -2.0
+        target_moments[13] = -1.0
     else:
         raise ValueError("derivative must be either 'laplace', 'x', or 'y'")
 
@@ -236,7 +241,7 @@ def train_model(model_id: int,
     workers = allowed[:cpu_cores]
     logger.info('Entering training loop')
 
-    loss_scaling = 1
+    loss_scaling = 10
 
     for epoch in range(1, epochs + 1):
         t0 = time.perf_counter()
@@ -371,20 +376,20 @@ if __name__=='__main__':
     cpu_cores   = 4                                        # number of cpu cores to load data for gpu
     batch_size  = 512                                      #
     prefetch_factor = 10                                    # number of batches for cpu to prefetch
-    model_id    = 33                                      # id of the model to save
+    model_id    = 36                                      # id of the model to save
     epochs      = 1000                                      # total of number of epochs to run
     lr          = 1e-4                                   # learning rate
     input_size  = 2                                        # 2 dimensional input
-    output_size = 16                                        # number of kernels
+    output_size = 1                                        # number of kernels
     layers      = 2                                        # num of gnn layers
     embedding_size = 256                                    # embedding size
     data_iteration = 4                                     # which original data iteration to use
     checkpoint_p_epoch = 100                                # every how many epochs to save checkpoint
-    approximation_order = 3                                # order of approximation for loss moments
-    continue_train_model = 'saved_models/checkpoint/attrs32_epoch292.pth'                              # set to checked model full path to resume training # saved_models/checkpoint/attrs14_epoch580.pth saved_models/checkpoint/attrs23_epoch25.pth
+    approximation_order = 4                                # order of approximation for loss moments
+    continue_train_model = ''                              # set to checked model full path to resume training # saved_models/checkpoint/attrs14_epoch580.pth saved_models/checkpoint/attrs23_epoch25.pth
                                                            # leave empty string above if new model is being trained
     load_weights       = False                             # set to true if data has weights
-    derivative         = 'x'                               # the differential operator the gnn will learn ('x', 'y', or 'laplace')
+    derivative         = 'x'                               # the differential operator the gnn will learn ('x', 'y', 'laplace', or 'hyp')
     base_model_path    = 'saved_models'                    # root dir to save models and checkpoints
     out_path           = jn(base_model_path, derivative)   # dir to save best model trained
     checkpoint_path    = jn(base_model_path, 'checkpoint') # dir to save checkpoint model
@@ -394,7 +399,7 @@ if __name__=='__main__':
     data_augmentation  = True                              # does 180-degree rotation in stencils
     dense_graph        = False                             # if all graph nodes are connected to each other or only to central node
 
-    train = False                                         # set train=False and plot=True to only visualise training loss
+    train = True                                         # set train=False and plot=True to only visualise training loss
     plot  = True
 
     f_path = jn(base_path, f'iter{data_iteration}')
