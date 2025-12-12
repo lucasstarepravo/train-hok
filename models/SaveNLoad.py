@@ -10,6 +10,7 @@ import logging
 from models.MessageGNN import MessagePassingGNN
 from models.AttentionGNN import AMessagePassingGNN
 from models.SNA_GNN import SNAMessagePassingGNN
+from models.csf_models import csf_gnn
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -29,7 +30,7 @@ def load_gnn(model_path=None,
                        map_location='cpu',
                        weights_only=False)
 
-    if model_class.lower() not in ['gnn', 'a_gnn', 'sa_gnn']:
+    if model_class.lower() not in ['gnn', 'a_gnn', 'sa_gnn','csf']:
         raise ValueError("model_class must be 'gnn', 'sa_gnn', or 'a_gnn' ")
 
     layers = attrs['layers']
@@ -44,6 +45,9 @@ def load_gnn(model_path=None,
     elif model_class.lower() == 'sa_gnn':
         model_instance = SNAMessagePassingGNN(embedding_size=embedding_size,
                                            layers=layers)
+    elif model_class.lower() == 'csf':
+        model_instance = csf_gnn(embedding_size=embedding_size,
+                                              layers=layers)
 
     weight_dict = OrderedDict()
     weight_dict.update(
