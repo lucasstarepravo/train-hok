@@ -29,9 +29,7 @@ class GraphLayer(MessagePassing):
         self.attention_mlp = nn.Sequential(
                 nn.Linear(embedding_size, embedding_size),
                 nn.Tanh(),
-                
-                nn.Linear(embedding_size, embedding_size),
-                nn.Tanh()
+
         )
         reset_params(self.attention_mlp, 'tanh')
 
@@ -43,9 +41,6 @@ class GraphLayer(MessagePassing):
         self.mlp_msg = nn.Sequential(
             nn.Linear(embedding_size, embedding_size),
             nn.Tanh(),
-            
-            nn.Linear(embedding_size, embedding_size),
-            nn.Tanh(),
 
         )
 
@@ -54,14 +49,11 @@ class GraphLayer(MessagePassing):
         self.mlp_upd = nn.Sequential(
             nn.Linear(2 * embedding_size, embedding_size),
             nn.Tanh(),
-            
-            nn.Linear(embedding_size, embedding_size),
-            nn.Tanh()
 
         )
         reset_params(self.mlp_upd, 'tanh')
 
-        self.node_norm = LayerNorm(embedding_size)
+        #self.node_norm = LayerNorm(embedding_size)
 
         #self.aggr_m = SumAggregation()
 
@@ -115,7 +107,7 @@ class GraphLayer(MessagePassing):
         return mes
 
     def update(self, aggr, node_feature, batch) -> Tensor:
-        aggr_msg = self.node_norm(aggr)
+        aggr_msg = aggr
         #edge_upd = self.edge_norm(aggr[1])
 
         msg_to_upd = torch.cat((node_feature, aggr_msg), dim=1)
@@ -155,18 +147,14 @@ class SNAMessagePassingGNN(nn.Module):
         self.graph_layers = nn.ModuleList(graph_layers)
 
         self.decoder1 = nn.Sequential(
-            nn.Linear(embedding_size, embedding_size),
-            nn.Tanh(),
             nn.Linear(embedding_size, embedding_size // 2),
             nn.Tanh(),
             nn.Linear(embedding_size // 2, embedding_size // 4),
             nn.Tanh(),
-            nn.Linear(embedding_size // 4, embedding_size // 8),
-            nn.Tanh()
         )
-        reset_params(self.decoder1, 'Tanh')
+        reset_params(self.decoder1, 'tanh')
 
-        self.decoder2 = nn.Sequential(nn.Linear(embedding_size // 8,  output_size))
+        self.decoder2 = nn.Sequential(nn.Linear(embedding_size // 4,  output_size))
 
     def forward(self,
                 node_feature: Tensor,
