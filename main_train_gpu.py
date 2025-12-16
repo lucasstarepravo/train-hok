@@ -204,7 +204,7 @@ def train_model(model_id: int,
     #lr_info   = LRScheduler(optimizer=optimizer)
     linear_scheduler = LinearLR(optimizer, start_factor=0.1, total_iters=10)
     plateau_scheduler = ReduceLROnPlateau(optimizer=optimizer,
-                                          patience=5,
+                                          patience=8,
                                           factor=0.4,
                                           cooldown=6,
                                           eps=1e-12)
@@ -241,7 +241,7 @@ def train_model(model_id: int,
     workers = allowed[:cpu_cores]
     logger.info('Entering training loop')
 
-    loss_scaling = 10
+    loss_scaling = 1
 
     for epoch in range(1, epochs + 1):
         t0 = time.perf_counter()
@@ -341,7 +341,8 @@ def train_model(model_id: int,
                          'lr'            : lr,
                          'embedding_size': embedding_size,
                          'approximation_order': approximation_order,
-                         'model_id'      : model_id}
+                         'model_id'      : model_id,
+                         'loss_scaling'  : loss_scaling}
             e = epoch + resume_epoch
             save_path = jn(checkpoint_path, f'attrs{model_id}_epoch{check_epoch}.pth')
             torch.save(save_dict, save_path)
@@ -361,7 +362,8 @@ def train_model(model_id: int,
                  'lr'            : lr,
                  'embedding_size': embedding_size,
                  'approximation_order': approximation_order,
-                 'model_id'      : model_id}
+                 'model_id'      : model_id,
+                 'loss_scaling'  : loss_scaling}
 
     save_path = jn(out_path, f'attrs{model_id}.pth')
 
@@ -385,7 +387,7 @@ if __name__=='__main__':
     embedding_size = 256                                    # embedding size
     data_iteration = 4                                     # which original data iteration to use
     checkpoint_p_epoch = 100                                # every how many epochs to save checkpoint
-    approximation_order = 4                                # order of approximation for loss moments
+    approximation_order = 2                                # order of approximation for loss moments
     continue_train_model = ''                              # set to checked model full path to resume training # saved_models/checkpoint/attrs14_epoch580.pth saved_models/checkpoint/attrs23_epoch25.pth
                                                            # leave empty string above if new model is being trained
     load_weights       = False                             # set to true if data has weights
@@ -399,7 +401,7 @@ if __name__=='__main__':
     data_augmentation  = True                              # does 180-degree rotation in stencils
     dense_graph        = False                             # if all graph nodes are connected to each other or only to central node
 
-    train = True                                         # set train=False and plot=True to only visualise training loss
+    train = False                                         # set train=False and plot=True to only visualise training loss
     plot  = True
 
     f_path = jn(base_path, f'iter{data_iteration}')
