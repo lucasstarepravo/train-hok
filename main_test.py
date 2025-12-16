@@ -29,13 +29,13 @@ if __name__ == '__main__':
     batch_size  = 512
     prefetch_factor = 5
     model_id    = 14
-    approximation_order = 3
+    approximation_order = 4
     data_path   = './preproc_data_no_w'
     model_path  = './saved_models'
-    derivative  = 'x'
+    derivative  = 'hyp'
     model_path  = jn(model_path, derivative)
     mem_or_disk = 'disk'
-    full_path   = 'saved_models/checkpoint/attrs32_epoch292.pth'
+    full_path   = 'saved_models/checkpoint/attrs36_epoch3014.pth'
     data_iteration = 4
     data_augmentation = False
     embedding_size = 256

@@ -29,11 +29,17 @@ def infer(model,
         target_moments[0] = 1.0
     elif derivative == 'y':
         target_moments[1] = 1.0
+    elif derivative == 'hyp':
+        if approximation_order != 4: raise ValueError('For hyperviscosity, operator must be 4th order')
+        target_moments[9] = -1.0
+        target_moments[11] = -2.0
+        target_moments[13] = -1.0
     else:
         raise ValueError("derivative must be either 'laplace', 'x', or 'y'")
 
     # Pre-computing data that will be used to compute the moments
-    target_moments = target_moments.expand(-1, batch_size).to(device=device)
+    #target_moments = target_moments.expand(-1, batch_size).to(device=device)
+    target_moments = target_moments.to(device=device)
 
     mon_power = monomial_power(approximation_order)
     inv_factorial = 1 / (factorial(mon_power[:, 0]) * factorial(mon_power[:, 1]))
@@ -45,8 +51,8 @@ def infer(model,
     model.eval()
     weights = []
 
-    total_moments_err = torch.zeros((n, 1), device=device)
-    total_moments_std = torch.zeros((n, 1), device=device)
+    total_moments_err = torch.zeros(n, device=device)
+    total_moments_std = torch.zeros(n, device=device)
 
     with torch.no_grad():
         with loader.enable_cpu_affinity(loader_cores=[0, 1, 2, 3]):
@@ -65,17 +71,14 @@ def infer(model,
                                             sum_aggr)
 
 
-                if batch.batch[-1] + 1 < batch_size:
-                    mom_diff = target_moments[:, batch.batch[-1] + 1] - pred_m
-                else:
-                    mom_diff = target_moments - pred_m
+                mom_diff = target_moments - pred_m
 
-                total_moments_err += torch.sum(abs(mom_diff), dim=1)
+                total_moments_err += torch.mean(abs(mom_diff), dim=1)
                 total_moments_std += torch.std(mom_diff, dim=1)
 
-                pred_reshape = torch.reshape(out, (int(max(batch.batch)) + 1, -1))
+                pred_reshape = torch.reshape(out, (int(batch.batch[-1]) + 1, -1))
 
-                weights.extend(pred_reshape.detach().cpu().numpy())
+                weights.extend(pred_reshape.cpu().numpy())
 
     total_moments_err /= batch_num
     total_moments_std /= batch_num
