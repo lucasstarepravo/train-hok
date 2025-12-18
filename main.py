@@ -21,7 +21,7 @@ def run_model(path_to_data,
               model_type,
               file_details,
               path_to_save='./data_out',
-              plot=False):
+              plot=True):
 
     logger.info(f'Running model with {layers} layers and ID {model_ID}')
 
@@ -53,30 +53,34 @@ def run_model(path_to_data,
     ann = BaseModel(hidden_layers=layers,
                     optimizer='adam',
                     loss_function='MSE',
-                    epochs=5,
+                    epochs=1000,
                     batch_size=128,
                     train_f=train_features,
                     train_l=train_labels)
 
-    ann = Transformer(hidden_layers=layers,
-                      optimizer='adam',
-                      loss_function='MSE',
-                      epochs=5,
-                      batch_size=128,
-                      train_f=train_features,
-                      train_l=train_labels,
-                      d_model=4,
-                      nhead=2,
-                      dim_feedforward=128,
-                      num_layers=1)
+    #ann = Transformer(hidden_layers=layers,
+    #                  optimizer='adam',
+    #                  loss_function='MSE',
+    #                  epochs=5,
+    #                  batch_size=128,
+    #                  train_f=train_features,
+    #                  train_l=train_labels,
+    #                  d_model=4,
+    #                  nhead=2,
+    #                  dim_feedforward=128,
+    #                  num_layers=1)
 
     logger.info('Starting model training')
 
-    mp.spawn(ann.fit,
-             args=(nprocs, path_to_save, model_type, model_ID,
+    ann.fit_cpu(path_to_save, model_type, model_ID,
                    train_features, train_labels, val_features, val_labels, None,
-                   test_features, test_labels, polynomial),
-             nprocs=nprocs)
+                   test_features, test_labels, polynomial)
+
+    #mp.spawn(ann.fit,
+    #         args=(nprocs, path_to_save, model_type, model_ID,
+    #               train_features, train_labels, val_features, val_labels, None,
+    #               test_features, test_labels, polynomial),
+    #         nprocs=nprocs)
 
     attrs = load_attrs(path_to_save, model_ID)
     model_path = os.path.join(path_to_save, f'{model_type}{model_ID}.pth')
@@ -107,10 +111,10 @@ def run_model(path_to_data,
 if __name__=='__main__':
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
-    run_model('/home/w32040lg/Shape Function Surrogate',
-              layers=7 * [64],
+    run_model('./fortran_data',
+              layers=2 * [64],
               model_ID='777',
               nprocs=2,
-              model_type='transformer',
-              file_details=[(6, 0.3)],
+              model_type='ann',
+              file_details=[(4, 0.3)],
               path_to_save='./data_out')

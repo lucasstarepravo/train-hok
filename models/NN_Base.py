@@ -106,6 +106,104 @@ class BaseModel:
         else:
             return optimizer
 
+    def fit_cpu(self,
+            path_to_save,
+            model_type,
+            model_ID,
+            train_f: Tensor,
+            train_l: Tensor,
+            val_f: Tensor,
+            val_l: Tensor,
+            old_optimiser_state,
+            test_f,
+            test_l,
+            polynomial):
+        """Train the model using Distributed Data Parallel (DDP)."""
+
+        # Preparing data for DDP
+        # Training data
+        train_tensor = TensorDataset(train_f, train_l)
+
+        train_loader = torch.utils.data.DataLoader(train_tensor,
+                                                   batch_size=self.batch_size,
+                                                   num_workers=4)
+
+        # Validation data
+        val_tensor = TensorDataset(val_f, val_l)
+
+        val_loader = torch.utils.data.DataLoader(val_tensor,
+                                                 batch_size=self.batch_size,
+                                                 num_workers=4)
+
+        # Moving model to GPU and initialising DDP
+        self.optimizer = self.define_optimizer(self.optimizer_str)
+        self.loss_function = define_loss(self.loss_function_str)
+
+        model = self.model
+
+        checkpoint_interval = 300
+
+        training_start_time = time.time()
+
+        for epoch in range(self.epochs):
+            epoch_start_time = time.time()
+            model.train()
+            running_loss = 0.0
+
+            for inputs, labels in train_loader:
+                self.optimizer.zero_grad()
+                outputs = self.forward_with_ddp(model, inputs)
+                loss = self.calculate_loss(outputs, labels, inputs)
+                loss.backward()
+                self.optimizer.step()
+                running_loss += loss.item() * inputs.size(0)
+
+            avg_training_loss = running_loss / len(train_loader.dataset)
+            self.tr_loss.append(avg_training_loss)
+
+            # Validation
+            val_loss = self.calculate_val_loss_cpu(model, val_loader)
+            self.val_loss.append(val_loss)
+            model.train()
+
+            # Save the best model weights
+            if val_loss < self.best_val_loss:
+                self.best_val_loss = val_loss
+                self.best_model_wts = model.state_dict().copy()
+
+            epoch_time = time.time() - epoch_start_time
+
+            print(f"Epoch {epoch + 1}/{self.epochs} - Loss: {avg_training_loss:.4e}, "
+                  f"Validation Loss: {val_loss:.4e}, Time: {epoch_time:.2f}s")
+
+            # Checkpoint to save model while training or if on last epoch
+            if (epoch+1) % checkpoint_interval == 0 or epoch == self.epochs - 1:
+                from data_processing.postprocessing import evaluate_model
+                self.save_checkpoint(path_to_save, model_type, model_ID, model)
+                evaluate_model(test_f, test_l, polynomial, model_ID, path_to_save, model_type)
+
+
+        # Calculate and print the total training time
+        total_training_time = time.time() - training_start_time
+
+        print(f'Total training time: {total_training_time:.3f}s')
+        # Save the model
+        self.save_model(path_to_save, model_type, model_ID)
+
+    def calculate_val_loss_cpu(self, model_ddp, val_loader):
+        """Calculate validation loss."""
+        model_ddp.eval()
+        val_loss = 0
+        with torch.no_grad():
+            for inputs, labels in val_loader:
+                outputs = model_ddp(inputs)
+                loss = self.loss_function(outputs, labels)
+                val_loss += loss.item() * inputs.size(0)
+        return val_loss / len(val_loader.dataset)
+
+
+
+
     def fit(self,
             proc_index,
             nprocs,
@@ -220,8 +318,8 @@ class BaseModel:
 
     def calculate_loss(self, outputs, labels, inputs=None):
         """Override if specific loss behavior is required."""
-        print(f'Shape of outputs: {outputs.shape}')
-        print(f'Shape of labels: {labels.shape}')
+        #print(f'Shape of outputs: {outputs.shape}')
+        #print(f'Shape of labels: {labels.shape}')
         return self.loss_function(outputs, labels)
 
     def calculate_val_loss(self, model_ddp, proc_index, val_loader):

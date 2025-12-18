@@ -131,7 +131,8 @@ def evaluate_model_error_alpha(x_values, y_actual, features, optimal_c, optimal_
 
 
 def import_stored_data(base_path, file, order, noise):
-    order_noise_path = os.path.join(base_path, f'Order_{order}', f'Noise_{noise}', 'Data')
+    #order_noise_path = os.path.join(base_path, f'Order_{order}', f'Noise_{noise}', 'Data')
+    order_noise_path = base_path
 
     ij_link_path = os.path.join(order_noise_path, 'neigh', f'ij_link{file}.csv')
     coor_path = os.path.join(order_noise_path, 'coor', f'coor{file}.csv')
