@@ -53,7 +53,7 @@ def run_model(path_to_data,
     ann = BaseModel(hidden_layers=layers,
                     optimizer='adam',
                     loss_function='MSE',
-                    epochs=1000,
+                    epochs=10000,
                     batch_size=128,
                     train_f=train_features,
                     train_l=train_labels)
@@ -112,7 +112,7 @@ if __name__=='__main__':
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = '12355'
     run_model('./fortran_data',
-              layers=2 * [64],
+              layers=4 * [32],
               model_ID='777',
               nprocs=2,
               model_type='ann',

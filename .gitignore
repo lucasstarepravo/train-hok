@@ -1,3 +1,8 @@
+.venv2
+data_out
+fortran_data
+fortran_parallel_data
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

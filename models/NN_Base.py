@@ -141,7 +141,7 @@ class BaseModel:
 
         model = self.model
 
-        checkpoint_interval = 300
+        checkpoint_interval = 1000
 
         training_start_time = time.time()
 
