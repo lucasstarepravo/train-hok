@@ -271,7 +271,9 @@ def train_model(model_id: int,
 
                 loss = F.mse_loss(target_moments, pred_m)
 
-                loss = loss_scaling * loss
+                w_norm = torch.dot(out.squeeze(), out.squeeze()) / out.shape[0]
+
+                loss = loss_scaling * loss + w_norm
 
                 loss.backward()
 
@@ -378,18 +380,18 @@ if __name__=='__main__':
     cpu_cores   = 4                                        # number of cpu cores to load data for gpu
     batch_size  = 512                                      #
     prefetch_factor = 10                                    # number of batches for cpu to prefetch
-    model_id    = 36                                      # id of the model to save
+    model_id    = 40                                      # id of the model to save
     epochs      = 1000                                      # total of number of epochs to run
     lr          = 1e-4                                   # learning rate
     input_size  = 2                                        # 2 dimensional input
     output_size = 1                                        # number of kernels
     layers      = 2                                        # num of gnn layers
-    embedding_size = 256                                    # embedding size
-    data_iteration = 4                                     # which original data iteration to use
+    embedding_size = 128                                    # embedding size
+    data_iteration = 3                                     # which original data iteration to use
     checkpoint_p_epoch = 100                                # every how many epochs to save checkpoint
-    approximation_order = 2                                # order of approximation for loss moments
+    approximation_order = 3                                # order of approximation for loss moments
     continue_train_model = ''                              # set to checked model full path to resume training # saved_models/checkpoint/attrs14_epoch580.pth saved_models/checkpoint/attrs23_epoch25.pth
-                                                           # leave empty string above if new model is being trained
+                                                           # leave string above empty if new model is being trained
     load_weights       = False                             # set to true if data has weights
     derivative         = 'x'                               # the differential operator the gnn will learn ('x', 'y', 'laplace', or 'hyp')
     base_model_path    = 'saved_models'                    # root dir to save models and checkpoints
@@ -401,7 +403,7 @@ if __name__=='__main__':
     data_augmentation  = True                              # does 180-degree rotation in stencils
     dense_graph        = False                             # if all graph nodes are connected to each other or only to central node
 
-    train = False                                         # set train=False and plot=True to only visualise training loss
+    train = True                                         # set train=False and plot=True to only visualise training loss
     plot  = True
 
     f_path = jn(base_path, f'iter{data_iteration}')

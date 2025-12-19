@@ -1,6 +1,6 @@
 .venv2
 .venv
-
+data_out
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

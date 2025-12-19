@@ -232,7 +232,7 @@ def import_and_process_data(data_path: str,
 if __name__ == '__main__':
     # This routine doesn't use h, it normalises the distance and wrt the maximum distance of the neighbours
     data_path         = './fortran_data'
-    data_iteration    = 4
+    data_iteration    = 3
     n_cores           = 4
     derivative        = 'x'
     load_weights      = False
