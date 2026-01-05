@@ -29,14 +29,14 @@ if __name__ == '__main__':
     batch_size  = 512
     prefetch_factor = 5
     model_id    = 14
-    approximation_order = 4
+    approximation_order = 3
     data_path   = './preproc_data_no_w'
     model_path  = './saved_models'
-    derivative  = 'hyp'
+    derivative  = 'x'
     model_path  = jn(model_path, derivative)
     mem_or_disk = 'disk'
-    full_path   = 'saved_models/checkpoint/attrs36_epoch3014.pth'
-    data_iteration = 4
+    full_path   = 'saved_models/x/attrs50.pth'
+    data_iteration = 3
     data_augmentation = False
     embedding_size = 256
 
@@ -83,12 +83,12 @@ if __name__ == '__main__':
                                                 approximation_order=approximation_order,
                                                 derivative=derivative,
                                                 batch_size=batch_size)
-
+    torch.set_printoptions(precision=10, sci_mode=True)
     print('moments error: ', moments_err)
     print('moments std dev: ', moments_std)
 
     if plot:
-        plot_kernel(distances[test_idx], weights, alpha=1)
+        plot_kernel(distances[test_idx], weights, alpha=1, save=True)
 
 
     # visualise results

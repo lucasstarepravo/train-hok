@@ -67,3 +67,13 @@ def calc_moments_test(inputs, outputs, approximation_order=2):
     moments = np.sum(weighted, axis=-1)
 
     return moments
+
+def calc_moments_torch_mlp(inputs, outputs, mon_power, inv_factorial):
+    inputs_reshape = inputs.reshape(inputs.shape[0], -1, 2)
+    monomial = inv_factorial * ((inputs_reshape[..., 0, None] ** mon_power[None, None, 0, :] *
+                                 inputs_reshape[..., 1, None] ** mon_power[None, None, 1, :]))
+
+    weighted = monomial * outputs[..., None]
+
+    moments = torch.sum(weighted, dim=1)
+    return moments

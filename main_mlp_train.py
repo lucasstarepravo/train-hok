@@ -1,4 +1,5 @@
 import torch
+from torch import nn
 import gc
 from models.SaveNLoad import load_gnn
 from collections import OrderedDict
@@ -6,19 +7,14 @@ import os
 from os.path import join as jn
 import logging
 import torch.nn.functional as F
-from torch_geometric.loader import DataLoader
 from numpy.typing import NDArray
 from typing import Optional
-from data_processing.graph_construction import OnDiskStencilGraph, InMemoryStencilGraph, CustomLoader
 from torch.optim.lr_scheduler import ReduceLROnPlateau, LinearLR
-from torch.profiler import profile, ProfilerActivity, record_function, schedule, tensorboard_trace_handler
 from Plots import plot_training_pytorch
 from data_processing.gnn_preproc import load
-from models.labfm_moments import calc_moments_torch, monomial_power
-from models.MessageGNN import MessagePassingGNN
-from models.AttentionGNN import AMessagePassingGNN
-from models.SNA_GNN import SNAMessagePassingGNN
-from models.Small_models import SmallGNN
+from models.labfm_moments import calc_moments_torch_mlp, monomial_power
+from data_processing.mlp_loader import MLPDataset
+from torch.utils.data import DataLoader
 from scipy.special import factorial
 from torch_geometric.nn.aggr import SumAggregation
 import torch._dynamo
@@ -29,87 +25,52 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 logger = logging.getLogger(__name__)
 
 if torch.cuda.is_available():
-    #torch.backends.cuda.matmul.allow_tf32 = True
-    #torch.backends.cudnn.allow_tf32 = True
-    torch.set_float32_matmul_precision('highest') # options are highest, high and medium
+    torch.backends.cuda.matmul.allow_tf32 = True
+    torch.backends.cudnn.allow_tf32 = True
+    torch.set_float32_matmul_precision('high') # options are highest, high and medium
     torch._dynamo.config.capture_scalar_outputs = True # required because of attention aggregation method in gnn
 
-def construct_data_loader(cpu_cores: int,
+def construct_mlp_data_loader(cpu_cores: int,
                           batch_size: int,
                           train_idx: NDArray,
                            val_idx: NDArray,
                            test_idx: NDArray,
                           distances: NDArray,
-                          embedding_size: int,
-                          prefetch_factor: int,
-                          dense_graph: bool,
-                          mem_or_disk: str = 'mem',
-                          root: Optional[str] = '',
-                          data_augmentation: bool = False):
+                          prefetch_factor: int):
 
-    test_root = os.path.join(root, 'test_graphs')
-    val_root  = os.path.join(root, 'val_graphs')
-    train_root = os.path.join(root, 'train_graphs')
-
-    if mem_or_disk not in ['mem', 'disk']:
-        raise ValueError("mem_or_disk must be 'mem' or 'disk'")
-
-    if mem_or_disk == 'disk':
-        graph_class = OnDiskStencilGraph
-        pin_memory = True
-    else:
-        graph_class = InMemoryStencilGraph
-        pin_memory = True
 
     logger.info('Creating graphs')
-    test_ds = graph_class(features=distances[test_idx] if distances is not None else None,
-                           embedding_size=embedding_size,
-                           root=test_root,
-                           data_augmentation=data_augmentation,
-                          dense_graph=dense_graph)
 
-    val_ds = graph_class(features=distances[val_idx] if distances is not None else None,
-                           embedding_size=embedding_size,
-                           root=val_root,
-                          data_augmentation=data_augmentation,
-                          dense_graph=dense_graph)
+    test_ds  = MLPDataset(features=distances[test_idx])
+    val_ds   = MLPDataset(features=distances[val_idx])
+    train_ds = MLPDataset(features=distances[train_idx])
 
-    train_ds = graph_class(features=distances[train_idx] if distances is not None else None,
-                           embedding_size=embedding_size,
-                           root=train_root,
-                            data_augmentation=data_augmentation,
-                          dense_graph=dense_graph)
 
     logger.info('Creating data loader')
-    test_loader = CustomLoader(test_ds,
-                             batch_size=batch_size,
-                             shuffle=False,
-                             num_workers=cpu_cores,
-                             pin_memory=pin_memory,
-                             drop_last=False,
-                             prefetch_factor=prefetch_factor,
-                             in_order=True)
 
-    val_loader = CustomLoader(val_ds,
+    test_loader = DataLoader(dataset=test_ds,
                              batch_size=batch_size,
                              shuffle=False,
                              num_workers=cpu_cores,
-                             pin_memory=pin_memory,
-                             drop_last=True,
+                             pin_memory=True,
                              prefetch_factor=prefetch_factor,
-                             in_order=True,
                              persistent_workers=True)
 
-    train_loader = CustomLoader(train_ds,
+    val_loader = DataLoader(dataset=val_ds,
+                             batch_size=batch_size,
+                             shuffle=False,
+                             num_workers=cpu_cores,
+                             pin_memory=True,
+                             prefetch_factor=prefetch_factor,
+                             persistent_workers=True)
+
+    train_loader = DataLoader(dataset=train_ds,
                              batch_size=batch_size,
                              shuffle=True,
                              num_workers=cpu_cores,
-                             pin_memory=pin_memory,
-                             drop_last=True,
+                              drop_last=True,
                              prefetch_factor=prefetch_factor,
-                             in_order=True,
                              persistent_workers=True)
-
 
     return test_loader, val_loader, train_loader
 
@@ -118,6 +79,7 @@ def train_model(model_id: int,
                 epochs: int,
                 input_size: int,
                 output_size: int,
+                neurons: int,
                 embedding_size: int,
                 layers: list | int,
                 lr: float,
@@ -135,6 +97,7 @@ def train_model(model_id: int,
         device = 'cuda'
     else:
         device = 'cpu'
+    #device = 'cpu'
 
 
     print(f"PID: {os.getpid()} started.")
@@ -161,10 +124,6 @@ def train_model(model_id: int,
         #                             embedding_size=embedding_size,
         #                            layers=layers,
         #                             output_size=output_size).to(device)
-        model = SmallGNN(input_size=input_size,
-                         output_size=output_size,
-                         embedding_size=embedding_size,
-                        layers=layers).to(device)
 
 
         weight_dict = OrderedDict()
@@ -173,11 +132,11 @@ def train_model(model_id: int,
             (k[len("module."):], v) if k.startswith("module.")
             else (k, v) for k, v in attrs['weights'].items())
 
-        model.load_state_dict(weight_dict)
-        model = model.to(device)
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+        #model.load_state_dict(weight_dict)
+        #model = model.to(device)
+        #optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-        optimizer.load_state_dict(attrs['optimizer'])
+        #optimizer.load_state_dict(attrs['optimizer'])
 
 
 
@@ -198,13 +157,35 @@ def train_model(model_id: int,
         #                             output_size=output_size,
         #                             embedding_size=embedding_size,
         #                            layers=layers).to(device)
-        model = SmallGNN(input_size=input_size,
-                         output_size=output_size,
-                         embedding_size=embedding_size,
-                        layers=layers).to(device)
+        model = nn.Sequential(
+            nn.Linear(input_size, neurons),
+            nn.LayerNorm(neurons),
+            nn.SiLU(),
+            nn.Linear(neurons, neurons),
+            nn.LayerNorm(neurons),
+            nn.SiLU(),
+            nn.Linear(neurons, neurons),
+            nn.LayerNorm(neurons),
+            nn.SiLU(),
+            nn.Linear(neurons, neurons),
+            nn.LayerNorm(neurons),
+            nn.SiLU(),
+            nn.Linear(neurons, neurons),
+            nn.LayerNorm(neurons),
+            nn.SiLU(),
+            nn.Linear(neurons, input_size // 2)
+        ).to(device)
 
-        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-        #optimizer = torch.optim.Adamax(model.parameters(), lr=lr)
+        #not_decay = [p for name, p in model.named_parameters() if 'linear' not in name]
+        #decay = [p for name, p in model.named_parameters() if 'linear' in name]
+
+        #optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+        optimizer = torch.optim.LBFGS(model.parameters(), lr=.5)
+
+        #optimizer = torch.optim.Adam([
+        #    {'params': not_decay, 'weight_decays':0},
+        #    {'params': decay}],
+        #    weight_decay=1e-2, lr=lr)
         train_history = []
         val_history = []
         best_val_loss = torch.inf
@@ -218,9 +199,21 @@ def train_model(model_id: int,
                                           cooldown=6,
                                           eps=1e-12)
 
+    def closure():
+        optimizer.zero_grad()
+
+        out = model(batch)
+        pred_m = calc_moments_torch_mlp(batch, out, mon_power, inv_factorial)
+
+        # Option A: per-sample target (target repeated across batch)
+        #target = target_moments.expand(pred_m.shape[0], -1)
+
+        loss = F.mse_loss(pred_m, target_moments)
+        loss.backward()
+        return loss
 
     n = int((approximation_order ** 2 + 3 * approximation_order) / 2)
-    target_moments = torch.zeros((n, 1), dtype=torch.float32)
+    target_moments = torch.zeros(n, dtype=torch.float32)
     if derivative == 'laplace':
         target_moments[2] = 1.0
         target_moments[4] = 1.0
@@ -237,7 +230,7 @@ def train_model(model_id: int,
         raise ValueError("derivative must be either 'laplace', 'x', or 'y'")
 
     # Pre-computing data that will be used to compute the moments
-    target_moments = target_moments.expand(-1, batch_size).to(device=device)
+    target_moments = target_moments[None, ...].to(device=device)
 
     mon_power = monomial_power(approximation_order)
     inv_factorial = 1 / (factorial(mon_power[:, 0]) * factorial(mon_power[:, 1]))
@@ -246,8 +239,8 @@ def train_model(model_id: int,
     sum_aggr = SumAggregation().to(device=device)
 
     model.compile()
-    allowed = sorted(os.sched_getaffinity(0))
-    workers = allowed[:cpu_cores]
+    #allowed = sorted(os.sched_getaffinity(0))
+    #workers = allowed[:cpu_cores]
     logger.info('Entering training loop')
 
     loss_scaling = 1
@@ -259,36 +252,29 @@ def train_model(model_id: int,
 
         total_loss = torch.tensor(0.0, device=device)
 
-        with train_loader.enable_cpu_affinity(loader_cores=workers):
+        for num_batches, batch in enumerate(train_loader):
 
-            for num_batches, batch in enumerate(train_loader):
+            batch = batch.to(device, non_blocking=True) # evaluate where stream synchronisation must happen now
 
-                batch = batch.to(device, non_blocking=True) # evaluate where stream synchronisation must happen now
+            #optimizer.zero_grad()
 
-                optimizer.zero_grad()
+            #out = model(batch)
 
-                out = model(batch.x,
-                            batch.edge_index,
-                            batch.batch)
+            #pred_m = calc_moments_torch_mlp(batch,
+            #                            out,
+            #                            mon_power,
+            #                            inv_factorial)
 
-                pred_m = calc_moments_torch(batch.x,
-                                            out,
-                                            batch.batch,
-                                            mon_power,
-                                            inv_factorial,
-                                            sum_aggr)
+            #loss = F.mse_loss(target_moments, pred_m)
 
-                loss = F.mse_loss(target_moments, pred_m)
+            #loss = loss_scaling * loss
 
-                #w_norm = torch.dot(out.squeeze(), out.squeeze()) / out.shape[0]
+            #loss.backward()
 
-                loss = loss_scaling * loss #+ w_norm
+            loss = float(optimizer.step(closure).detach())
 
-                loss.backward()
-
-                optimizer.step()
-
-                total_loss += loss.detach()
+            total_loss += loss#.detach()
+            #total_loss += loss.detach()
 
 
         train_loss = total_loss / (num_batches + 1)
@@ -298,33 +284,28 @@ def train_model(model_id: int,
         total_loss = torch.tensor(0.0, device=device)
         num_batches = 0
         with torch.no_grad():
-            with val_loader.enable_cpu_affinity(loader_cores=workers):
-                for batch in val_loader:
-                    num_batches += 1
-                    batch = batch.to(device, non_blocking=True)
-                    out = model(batch.x,
-                                batch.edge_index,
-                                batch.batch)
+            for batch in val_loader:
+                num_batches += 1
+                batch = batch.to(device, non_blocking=True)
+                out = model(batch)
 
-                    pred_m = calc_moments_torch(batch.x,
+                pred_m = calc_moments_torch_mlp(batch,
                                                 out,
-                                                batch.batch,
                                                 mon_power,
-                                                inv_factorial,
-                                                sum_aggr)
+                                                inv_factorial)
 
-                    val_loss = F.mse_loss(target_moments, pred_m)
+                val_loss = F.mse_loss(target_moments, pred_m)
 
-                    total_loss += val_loss#.detach()
+                total_loss += val_loss#.detach()
 
-                val_loss = total_loss / num_batches
+            val_loss = total_loss / num_batches
 
-                if val_loss < best_val_loss:
-                    e = epoch + resume_epoch
-                    check_epoch = e
-                    best_val_loss = val_loss
-                    save_weights = model.state_dict()
-                    save_optimizer = optimizer.state_dict()
+            if val_loss < best_val_loss:
+                e = epoch + resume_epoch
+                check_epoch = e
+                best_val_loss = val_loss
+                save_weights = model.state_dict()
+                save_optimizer = optimizer.state_dict()
 
         train_loss /= loss_scaling
         train_history.append(float(train_loss))
@@ -387,19 +368,20 @@ if __name__=='__main__':
     # to isolate the host and the cores used for dataloader run the code with
     # numactl -C 4-7 --localalloc python3 main_train_gpu.py
     cpu_cores   = 4                                        # number of cpu cores to load data for gpu
-    batch_size  = 32                                      #
-    prefetch_factor = 10                                    # number of batches for cpu to prefetch
-    model_id    = 53                                      # id of the model to save
+    batch_size  = 1024                                      #
+    prefetch_factor = 5                                    # number of batches for cpu to prefetch
+    model_id    = 54                                      # id of the model to save
     epochs      = 1000                                      # total of number of epochs to run
     lr          = 1e-3                                   # learning rate
-    input_size  = 2                                        # 2 dimensional input
+    input_size  = 60 - 2                                        # 2 dimensional input
     output_size = 1                                        # number of kernels
     layers      = 2                                        # num of gnn layers
-    embedding_size = 32                                    # embedding size
+    embedding_size = 128                                    # embedding size
     data_iteration = 2                                     # which original data iteration to use
     checkpoint_p_epoch = 500                                # every how many epochs to save checkpoint
-    approximation_order = 3                                # order of approximation for loss moments
-    continue_train_model = 'saved_models/checkpoint/attrs53_epoch492.pth'                              # set to checked model full path to resume training # saved_models/checkpoint/attrs14_epoch580.pth saved_models/checkpoint/attrs23_epoch25.pth
+    approximation_order = 2                                # order of approximation for loss moments
+    neurons = 128
+    continue_train_model = ''                              # set to checked model full path to resume training # saved_models/checkpoint/attrs14_epoch580.pth saved_models/checkpoint/attrs23_epoch25.pth
                                                            # leave string above empty if new model is being trained
     load_weights       = False                             # set to true if data has weights
     derivative         = 'x'                               # the differential operator the gnn will learn ('x', 'y', 'laplace', or 'hyp')
@@ -427,18 +409,13 @@ if __name__=='__main__':
 
         (test_loader,
          val_loader,
-         train_loader) = construct_data_loader(cpu_cores=cpu_cores,
+         train_loader) = construct_mlp_data_loader(cpu_cores=cpu_cores,
                                                batch_size=batch_size,
                                                train_idx=train_idx,
                                                val_idx=val_idx,
                                                test_idx=test_idx,
                                                distances=distances,
-                                               embedding_size=embedding_size,
-                                               prefetch_factor=prefetch_factor,
-                                               root=root_dir_graphs,
-                                               data_augmentation=data_augmentation,
-                                               mem_or_disk=mem_or_disk,
-                                               dense_graph=dense_graph)
+                                               prefetch_factor=prefetch_factor)
 
         os.makedirs(out_path, exist_ok=True)
         os.makedirs(checkpoint_path, exist_ok=True)
@@ -446,6 +423,7 @@ if __name__=='__main__':
                     epochs,
                     input_size,
                     output_size,
+                    neurons,
                     embedding_size,
                     layers,
                     lr,

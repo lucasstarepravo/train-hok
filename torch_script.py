@@ -13,14 +13,14 @@ if __name__ == '__main__':
     of pytorch geometric
     '''
     model_id = 44
-    derivative = 'laplace'
+    derivative = 'hyp'
     model_path = os.path.join('./saved_models', derivative, f'attrs{model_id}.pth')
     fortran_path = os.path.join('./fortran/', derivative)
-    full_path = 'saved_models/checkpoint/attrs30_epoch796.pth'
+    full_path = 'saved_models/hyp/attrs36_epoch1699.pth'
     os.makedirs(fortran_path, exist_ok=True)
 
     # Script model
-    model, _ = load_gnn(model_path, model_class='csf', full_path=full_path)
+    model, _ = load_gnn(model_path, model_class='sa_gnn', full_path=full_path)
     model.eval()
     scripted_model = torch.jit.script(model)
     p = os.path.join(fortran_path,'script.ts')

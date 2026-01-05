@@ -239,7 +239,7 @@ if __name__ == '__main__':
     parallel          = True
     root              = 'preproc_data_no_w'
     data_augmentation = False
-    max_neighbours    = 1000
+    max_neighbours    = 100
     plot_stencil      = False
 
     test_root  = os.path.join(root, 'test_graphs')

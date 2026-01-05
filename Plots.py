@@ -1,4 +1,5 @@
 import numpy as np
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter
 import matplotlib.colors as mcolors
@@ -45,24 +46,84 @@ def plot_training_pytorch(history, log_x=False, log_y=False, alpha=0.7):
     plt.show()
 
 
-def plot_kernel(features, labels=None, alpha=0.6, size = 2):
-    # flatten all arrays consistently
-    x = features[:, :, 0].flatten()
-    y = features[:, :, 1].flatten()
-    if labels is not None:
-        c = labels.flatten()
+# --- Global, publication-grade PDF settings (set once per script)
+mpl.rcParams.update({
+    "savefig.format": "pdf",
+    "savefig.dpi": 300,
+    "pdf.fonttype": 42,          # embed TrueType fonts (better in LaTeX/publishers)
+    "ps.fonttype": 42,
+    "font.family": "serif",
+    "axes.unicode_minus": False,
+})
 
-    plt.figure(figsize=(6, 6))
+def plot_kernel(
+    features,
+    labels=None,
+    alpha=0.6,
+    size=4,
+    save=False,
+    filename="kernel_offsets.pdf",
+    column="single",             # "single" or "double"
+    rasterize_points=True,      # set True only if you have millions of points
+):
+    """
+    High-quality (vector PDF) scatter plot of neighbour offsets.
+    """
+
+    x = features[:, 1:, 0].reshape(-1)
+    y = features[:, 1:, 1].reshape(-1)
     if labels is not None:
-        sc = plt.scatter(x, y, c=c, cmap='viridis', s=size, alpha=alpha)
+        c = labels[:, 1:].reshape(-1)
+
+    figsize = (3.25, 3.25) if column == "single" else (6.75, 3.25)
+    fig, ax = plt.subplots(figsize=figsize)
+
+    if labels is not None:
+        sc = ax.scatter(
+            x, y,
+            c=c,
+            s=size,
+            alpha=alpha,
+            cmap="viridis",
+            linewidths=0,
+            rasterized=rasterize_points,  # keeps PDF light if needed
+        )
     else:
-        sc = plt.scatter(x, y, cmap='viridis', s=size, alpha=alpha)
-    plt.xlabel('x distance')
-    plt.ylabel('y distance')
-    plt.title('Neighbour offsets coloured by target')
-    plt.axis('equal')
-    plt.colorbar(sc, label='Target value')
-    plt.show()
+        sc = ax.scatter(
+            x, y,
+            s=size,
+            alpha=alpha,
+            cmap="viridis",
+            linewidths=0,
+            rasterized=rasterize_points,
+        )
+
+    ax.set_xlabel(r"$\Delta x$", fontsize=9)
+    ax.set_ylabel(r"$\Delta y$", fontsize=9)
+    ax.axis("equal")
+
+    ax.tick_params(labelsize=8)
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+
+    if labels is not None:
+        cbar = fig.colorbar(sc, ax=ax, pad=0.02)
+        cbar.ax.tick_params(labelsize=8)
+        #cbar.set_label(r"Weight", fontsize=9)
+
+    fig.tight_layout()
+
+    if save:
+        fig.savefig(
+            filename,
+            bbox_inches="tight",
+            pad_inches=0.01,
+            transparent=True,
+            metadata={"Creator": "Matplotlib"},
+        )
+        plt.close(fig)
+    else:
+        plt.show()
 
 
 

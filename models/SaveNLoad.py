@@ -9,7 +9,8 @@ import pickle as pk
 import logging
 from models.MessageGNN import MessagePassingGNN
 from models.AttentionGNN import AMessagePassingGNN
-from models.SNA_GNN import SNAMessagePassingGNN
+#from models.SNA_GNN import SNAMessagePassingGNN
+from models.m36 import SNAMessagePassingGNN
 from models.csf_models import csf_gnn
 
 # Set up logging
@@ -48,6 +49,7 @@ def load_gnn(model_path=None,
     elif model_class.lower() == 'csf':
         model_instance = csf_gnn(embedding_size=embedding_size,
                                               layers=layers)
+
 
     weight_dict = OrderedDict()
     weight_dict.update(
