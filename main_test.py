@@ -1,17 +1,11 @@
-from scipy.differentiate import derivative
-from torch.nn.functional import embedding
-
-from models.SaveNLoad import load_gnn
-from data_processing.gnn_preproc import load, gnn_denorm
+from functions.SaveNLoad import load_gnn
+from functions.gnn_preproc import load
 from os.path import join as jn
 import logging
 import torch
-from data_processing.graph_construction import InMemoryStencilGraph, OnDiskStencilGraph, CustomLoader
-from torch_geometric.loader import DataLoader
-from models.gnn_infer import infer
-import numpy as np
-from models.labfm_moments import calc_moments_test
-from Plots import plot_kernel
+from functions.graph_construction import OnDiskStencilGraph, CustomLoader
+from functions.gnn_infer import infer
+from functions.Plots import plot_kernel
 
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -34,11 +28,9 @@ if __name__ == '__main__':
     model_path  = './saved_models'
     derivative  = 'x'
     model_path  = jn(model_path, derivative)
-    mem_or_disk = 'disk'
     full_path   = 'saved_models/x/attrs50.pth'
     data_iteration = 3
     data_augmentation = False
-    embedding_size = 256
 
     plot = True
     save_results = False
@@ -56,11 +48,9 @@ if __name__ == '__main__':
 
 
     logger.info('Constructing loader')
-    root_dir_graphs = jn('graphs', mem_or_disk, str(data_iteration), 'test_graphs')
+    root_dir_graphs = jn('graphs', str(data_iteration), 'test_graphs')
     test_ds = OnDiskStencilGraph(features=distances[test_idx],
-                                   embedding_size=embedding_size,
-                                   root=root_dir_graphs,
-                                   data_augmentation=data_augmentation)
+                                   root=root_dir_graphs)
 
     test_loader = CustomLoader(test_ds,
                              batch_size=batch_size,
@@ -88,7 +78,7 @@ if __name__ == '__main__':
     print('moments std dev: ', moments_std)
 
     if plot:
+        # visualise kernel
         plot_kernel(distances[test_idx], weights, alpha=1, save=True)
 
 
-    # visualise results

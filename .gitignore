@@ -12,7 +12,7 @@ __pycache__/
 
 *_graphs
 saved_models
-fortran_data/*
+dataset
 preproc_data
 log*
 preproc_data*

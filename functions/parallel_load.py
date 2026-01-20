@@ -17,10 +17,9 @@ def _matches_files(path: Path, files: int) -> tuple[bool, int | None]:
 
 
 def _load_csv(path: str, skip_header: int = 0, delimiter: str = ','):
-    """Load a CSV file and postprocess it to remove trailing NaN columns and reshape to (N, M/2, 2)."""
     arr = np.genfromtxt(path, delimiter=delimiter, skip_header=skip_header)
 
-    # Remove trailing NaN column (caused by trailing commas)
+    # Remove trailing NaN column
     if arr.ndim == 2 and np.all(np.isnan(arr[:, -1])):
         arr = arr[:, :-1]
 
@@ -79,17 +78,13 @@ def load_ij_links_parallel(
         ordered_suffixes = sorted(results.keys()) if sort_by_suffix else list(results.keys())
         return [results[s] for s in ordered_suffixes]
 
-# --- convenience: stack if shapes match ---
 def load_and_stack_ij_links(
     directory: str | Path,
     data_iteration: int,
-    n_cores: int | None = None,   # <-- added
+    n_cores: int | None = None,
     **kwargs
 ) -> np.ndarray:
-    """
-    Loads ij_link{files}_*.csv in parallel and concatenates them along `axis`.
-    Raises a clear error if shapes are incompatible.
-    """
+
     arrays = load_ij_links_parallel(directory, data_iteration, return_map=False, max_workers=n_cores, **kwargs)
 
     return np.concatenate(arrays)
