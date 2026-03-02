@@ -29,8 +29,9 @@ class GraphLayer(MessagePassing):
         self.attention_mlp = nn.Sequential(
                 nn.Linear(embedding_size, embedding_size),
                 nn.Tanh(),
+
         )
-        #reset_params(self.attention_mlp, 'tanh')
+        reset_params(self.attention_mlp, 'tanh')
 
         self.attention_aggr = AttentionalAggregation(nn.Sequential(
             nn.Linear(embedding_size, embedding_size)),
@@ -126,8 +127,8 @@ class SmallGNN(nn.Module):
         self.embedding_size = embedding_size
 
         self.node_encoder  = nn.Sequential(
-            nn.Linear(input_size, embedding_size//2),
-            nn.Tanh(),
+            nn.Linear(input_size, embedding_size),
+            nn.Tanh()
         )
         reset_params(self.node_encoder, 'tanh')
 
@@ -139,16 +140,17 @@ class SmallGNN(nn.Module):
 
         graph_layers = []
         for _ in range(layers):
-            graph_layers.append(GraphLayer(embedding_size//2))
+            graph_layers.append(GraphLayer(embedding_size))
 
         self.graph_layers = nn.ModuleList(graph_layers)
 
-        self.decoder = nn.Sequential(
-            nn.Linear(embedding_size//2, embedding_size),
-            nn.Tanh(),
-            nn.Sequential(nn.Linear(embedding_size, output_size))
+        self.decoder1 = nn.Sequential(
+            nn.Linear(embedding_size, embedding_size // 2),
+            nn.Tanh()
         )
-        reset_params(self.decoder, 'tanh')
+        reset_params(self.decoder1, 'tanh')
+
+        self.decoder2 = nn.Sequential(nn.Linear(embedding_size // 2,  output_size))
 
     def forward(self,
                 node_feature: Tensor,
@@ -165,7 +167,7 @@ class SmallGNN(nn.Module):
             emb_node_feature = layer(emb_node_feature, edge_index, batch)
 
 
-        out = self.decoder(emb_node_feature)
-
+        out = self.decoder1(emb_node_feature)
+        out = self.decoder2(out)
 
         return out
