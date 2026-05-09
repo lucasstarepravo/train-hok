@@ -231,15 +231,16 @@ def import_and_process_data(data_path: str,
 
 if __name__ == '__main__':
     # This routine doesn't use h, it normalises the distance and wrt the maximum distance of the neighbours
-    data_path         = './fortran_data'
-    data_iteration    = 3
+    data_path         = './fortran_parallel_data'
+    data_path         = './blue_noise'
+    data_iteration    = 1
     n_cores           = 4
     derivative        = 'x'
     load_weights      = False
     parallel          = True
     root              = 'preproc_data_no_w'
     data_augmentation = False
-    max_neighbours    = 100
+    max_neighbours    = 25
     plot_stencil      = False
 
     test_root  = os.path.join(root, 'test_graphs')
@@ -247,7 +248,6 @@ if __name__ == '__main__':
     train_root = os.path.join(root, 'train_graphs')
 
     if parallel:
-        data_path = 'fortran_parallel_data'
         save_path = os.path.join('./preproc_data_no_w', f'iter{data_iteration}')
         os.makedirs(save_path, exist_ok=True)
         import_parallel(data_path=data_path,

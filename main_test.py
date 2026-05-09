@@ -29,14 +29,14 @@ if __name__ == '__main__':
     batch_size  = 512
     prefetch_factor = 5
     model_id    = 14
-    approximation_order = 3
+    approximation_order = 2
     data_path   = './preproc_data_no_w'
     model_path  = './saved_models'
     derivative  = 'x'
     model_path  = jn(model_path, derivative)
     mem_or_disk = 'disk'
-    full_path   = 'saved_models/x/attrs50.pth'
-    data_iteration = 3
+    full_path   = 'saved_models/x/attrs53.pth'
+    data_iteration = 2
     data_augmentation = False
     embedding_size = 256
 

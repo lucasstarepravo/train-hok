@@ -215,7 +215,7 @@ def train_model(model_id: int,
     plateau_scheduler = ReduceLROnPlateau(optimizer=optimizer,
                                           patience=8,
                                           factor=0.4,
-                                          cooldown=6,
+                                          cooldown=10,
                                           eps=1e-12)
 
 
@@ -387,19 +387,19 @@ if __name__=='__main__':
     # to isolate the host and the cores used for dataloader run the code with
     # numactl -C 4-7 --localalloc python3 main_train_gpu.py
     cpu_cores   = 4                                        # number of cpu cores to load data for gpu
-    batch_size  = 32                                      #
+    batch_size  = 256                                      #
     prefetch_factor = 10                                    # number of batches for cpu to prefetch
-    model_id    = 53                                      # id of the model to save
+    model_id    = 68                                      # id of the model to save
     epochs      = 1000                                      # total of number of epochs to run
-    lr          = 1e-3                                   # learning rate
+    lr          = 1e-4                                   # learning rate
     input_size  = 2                                        # 2 dimensional input
     output_size = 1                                        # number of kernels
     layers      = 2                                        # num of gnn layers
-    embedding_size = 32                                    # embedding size
-    data_iteration = 2                                     # which original data iteration to use
+    embedding_size = 128                                    # embedding size
+    data_iteration = 1                                     # which original data iteration to use
     checkpoint_p_epoch = 500                                # every how many epochs to save checkpoint
-    approximation_order = 3                                # order of approximation for loss moments
-    continue_train_model = 'saved_models/checkpoint/attrs53_epoch492.pth'                              # set to checked model full path to resume training # saved_models/checkpoint/attrs14_epoch580.pth saved_models/checkpoint/attrs23_epoch25.pth
+    approximation_order = 2                                # order of approximation for loss moments
+    continue_train_model = ''                              # set to checked model full path to resume training # saved_models/checkpoint/attrs14_epoch580.pth saved_models/checkpoint/attrs23_epoch25.pth
                                                            # leave string above empty if new model is being trained
     load_weights       = False                             # set to true if data has weights
     derivative         = 'x'                               # the differential operator the gnn will learn ('x', 'y', 'laplace', or 'hyp')
