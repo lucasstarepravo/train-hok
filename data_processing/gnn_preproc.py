@@ -210,14 +210,17 @@ def import_stored_data(base_path, file, derivative, load_weights = True):
         weights = np.concatenate((np.zeros(shape=(weights.shape[0], 1)),
                                   trim_zero_columns(weights[:, 1:])), axis=1)
 
-    dx_path = os.path.join(base_path, 'h', f'h{file}.csv')
+    dx_path   = os.path.join(base_path, 'h',    f'h{file}.csv')
+    amat_path = os.path.join(base_path, 'amat', f'amat_{file}.csv')
+    psi_path  = os.path.join(base_path, 'psi',  f'{derivative}', f'psi_{file}.csv')
 
     ij_link = np.genfromtxt(ij_link_path, delimiter=',', skip_header=0)
     coor = np.genfromtxt(coor_path, delimiter=',', skip_header=0)
     coor = coor[:, :-1]
 
+    h    = np.genfromtxt(dx_path,   delimiter=',', skip_header=0)
+    h    = h[0]
+    amat = np.genfromtxt(amat_path, delimiter=',', skip_header=0)
+    psi  = np.genfromtxt(psi_path,  delimiter=',', skip_header=0)
 
-    h = np.genfromtxt(dx_path, delimiter=',', skip_header=0)
-    h = h[0]
-
-    return ij_link, coor, weights, h
+    return ij_link, coor, weights, h, amat, psi

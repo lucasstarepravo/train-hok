@@ -36,14 +36,18 @@ def construct_mlp_data_loader(cpu_cores: int,
                            val_idx: NDArray,
                            test_idx: NDArray,
                           distances: NDArray,
+                          weights: NDArray,
                           prefetch_factor: int):
 
 
     logger.info('Creating graphs')
 
-    test_ds  = MLPDataset(features=distances[test_idx])
-    val_ds   = MLPDataset(features=distances[val_idx])
-    train_ds = MLPDataset(features=distances[train_idx])
+    #print(weights.shape)
+    #print(distances.shape)
+
+    test_ds  = MLPDataset(features=distances[test_idx], labels=weights[test_idx])
+    val_ds   = MLPDataset(features=distances[val_idx], labels=weights[val_idx])
+    train_ds = MLPDataset(features=distances[train_idx], labels=weights[train_idx])
 
 
     logger.info('Creating data loader')
@@ -179,8 +183,8 @@ def train_model(model_id: int,
         #not_decay = [p for name, p in model.named_parameters() if 'linear' not in name]
         #decay = [p for name, p in model.named_parameters() if 'linear' in name]
 
-        #optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-        optimizer = torch.optim.LBFGS(model.parameters(), lr=.5)
+        optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+        #optimizer = torch.optim.LBFGS(model.parameters(), lr=.5)
 
         #optimizer = torch.optim.Adam([
         #    {'params': not_decay, 'weight_decays':0},
@@ -254,11 +258,12 @@ def train_model(model_id: int,
 
         for num_batches, batch in enumerate(train_loader):
 
-            batch = batch.to(device, non_blocking=True) # evaluate where stream synchronisation must happen now
+            batch_x = batch[0].to(device, non_blocking=True) # evaluate where stream synchronisation must happen now
+            batch_y = batch[1].to(device, non_blocking=True)
 
-            #optimizer.zero_grad()
+            optimizer.zero_grad()
 
-            #out = model(batch)
+            out = model(batch_x)
 
             #pred_m = calc_moments_torch_mlp(batch,
             #                            out,
@@ -267,13 +272,15 @@ def train_model(model_id: int,
 
             #loss = F.mse_loss(target_moments, pred_m)
 
+            loss = F.mse_loss(out, batch_y)
+
             #loss = loss_scaling * loss
 
-            #loss.backward()
+            loss.backward()
 
-            loss = float(optimizer.step(closure).detach())
+            optimizer.step()
 
-            total_loss += loss#.detach()
+            total_loss += loss.detach()
             #total_loss += loss.detach()
 
 
@@ -286,17 +293,19 @@ def train_model(model_id: int,
         with torch.no_grad():
             for batch in val_loader:
                 num_batches += 1
-                batch = batch.to(device, non_blocking=True)
-                out = model(batch)
+                batch_x = batch[0].to(device, non_blocking=True)
+                batch_y = batch[1].to(device, non_blocking=True)
 
-                pred_m = calc_moments_torch_mlp(batch,
-                                                out,
-                                                mon_power,
-                                                inv_factorial)
+                out = model(batch_x)
 
-                val_loss = F.mse_loss(target_moments, pred_m)
+                #pred_m = calc_moments_torch_mlp(batch,
+                #                                out,
+                #                                mon_power,
+                #                                inv_factorial)
 
-                total_loss += val_loss#.detach()
+                val_loss = F.mse_loss(batch_y, out)
+
+                total_loss += val_loss.detach()
 
             val_loss = total_loss / num_batches
 
@@ -368,16 +377,16 @@ if __name__=='__main__':
     # to isolate the host and the cores used for dataloader run the code with
     # numactl -C 4-7 --localalloc python3 main_train_gpu.py
     cpu_cores   = 4                                        # number of cpu cores to load data for gpu
-    batch_size  = 1024                                      #
+    batch_size  = 2**11                                      #
     prefetch_factor = 5                                    # number of batches for cpu to prefetch
-    model_id    = 54                                      # id of the model to save
-    epochs      = 1000                                      # total of number of epochs to run
+    model_id    = 81                                      # id of the model to save
+    epochs      = 2000                                      # total of number of epochs to run
     lr          = 1e-3                                   # learning rate
     input_size  = 60 - 2                                        # 2 dimensional input
     output_size = 1                                        # number of kernels
     layers      = 2                                        # num of gnn layers
     embedding_size = 128                                    # embedding size
-    data_iteration = 2                                     # which original data iteration to use
+    data_iteration = 8                                     # which original data iteration to use
     checkpoint_p_epoch = 500                                # every how many epochs to save checkpoint
     approximation_order = 2                                # order of approximation for loss moments
     neurons = 128
@@ -389,7 +398,7 @@ if __name__=='__main__':
     out_path           = jn(base_model_path, derivative)   # dir to save best model trained
     checkpoint_path    = jn(base_model_path, 'checkpoint') # dir to save checkpoint model
     root_dir_graphs    = 'graphs'                          # root dir for graphs to be saved
-    base_path          = 'preproc_data_no_w'               # root dir to get imported preproc data
+    base_path          = 'preproc_data'               # root dir to get imported preproc data
     mem_or_disk        = 'disk'                            # dataset to be placed on RAM or disk (either 'mem' or 'disk')
     data_augmentation  = True                              # does 180-degree rotation in stencils
     dense_graph        = False                             # if all graph nodes are connected to each other or only to central node
@@ -405,7 +414,8 @@ if __name__=='__main__':
         train_idx = load(os.path.join(f_path, 'train_idx.pk'))
         val_idx = load(os.path.join(f_path, 'val_idx.pk'))
         test_idx = load(os.path.join(f_path, 'test_idx.pk'))
-
+        weights = load(os.path.join(f_path, 'weights.pk'))
+        h = load(os.path.join(f_path, 'h.pk'))
 
         (test_loader,
          val_loader,
@@ -415,6 +425,7 @@ if __name__=='__main__':
                                                val_idx=val_idx,
                                                test_idx=test_idx,
                                                distances=distances,
+                                               weights=weights,
                                                prefetch_factor=prefetch_factor)
 
         os.makedirs(out_path, exist_ok=True)

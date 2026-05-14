@@ -83,7 +83,9 @@ def import_no_weight(data_path: str,
     (ij_link,
      coor,
      _,
-     h) = import_stored_data(data_path, data_iteration, derivative, load_weights=False)
+     h,
+     amat,
+     psi) = import_stored_data(data_path, data_iteration, derivative, load_weights=False)
 
     features = feat_extract(coor, ij_link)
 
@@ -157,24 +159,25 @@ def import_and_process_data(data_path: str,
     (ij_link,
      coor,
      weights,
-     h) = import_stored_data(data_path, data_iteration, derivative)
+     h,
+     amat,
+     psi) = import_stored_data(data_path, data_iteration, derivative)
+
 
     # Extract and process features
     features = feat_extract(coor, ij_link)
     #features = features[:, 1:, :]  # Removes the first item which is always 0
 
     #moments = check_moments(features, weights)
+    #print(moments)
 
-
-    (stand_feature,
-     stand_label,
+    (distances,
+     weights,
      h_xy,
      h_w) = non_dimension(features,
                           weights,
                           h,
                           dtype=derivative)
-
-
 
     h_xy_path = os.path.join(save_path, 'h_xy.pk')
     h_w_path  = os.path.join(save_path, 'h_w.pk')
@@ -183,61 +186,91 @@ def import_and_process_data(data_path: str,
          h_w_path, h_w)
 
     #moments_norm = check_moments(stand_feature, stand_label)
+    print(distances.shape[0])
+    train_size = int(distances.shape[0] * 0.7)
+    val_size  = int(distances.shape[0] * 0.2)
+    test_size = int(distances.shape[0] * 0.1)
 
-    (train_f,
-     train_l,
-     test_f,
-     test_l,
-     train_index,
-     test_index) = gnn_train_test_split(stand_feature,
-                                     stand_label,
-                                     tt_split=0.9,
-                                     seed=1)  # This generates the test data
+    (train_idx,
+     val_idx,
+     test_idx) = split_data_by_index(0, distances.shape[0], (train_size, val_size, test_size), seed=42)
+
+    print('Training dataset size: ', train_idx.shape[0])
+    print('Validation dataset size: ', val_idx.shape[0])
+    print('Test dataset size: ', test_idx.shape[0])
+    print('Total dataset size: ', train_idx.shape[0] + val_idx.shape[0] + test_idx.shape[0])
+    print('Number of neighbours: ', distances.shape[1])
+
+    # path, obj
+    train_idx_dir = os.path.join(save_path, 'train_idx.pk')
+    val_idx_dir = os.path.join(save_path, 'val_idx.pk')
+    test_idx_dir = os.path.join(save_path, 'test_idx.pk')
+    distances_dir = os.path.join(save_path, 'distances.pk')
+    weights_dir = os.path.join(save_path, 'weights.pk')
+    h_dir = os.path.join(save_path, 'h.pk')
+
+    save(train_idx_dir, train_idx,
+         val_idx_dir, val_idx,
+         test_idx_dir, test_idx,
+         distances_dir, distances,
+         weights_dir, weights,
+         h_dir, h)
+
+
+    #(train_f,
+    # train_l,
+    # test_f,
+    # test_l,
+    # train_index,
+    # test_index) = gnn_train_test_split(stand_feature,
+    #                                 stand_label,
+    #                                 tt_split=0.9)  # This generates the test data
 
     #moments_train = check_moments(train_f, train_l)
 
 
-    (train_f,
-     val_f,
-     train_l,
-     val_l) = train_test_split(train_f,
-                               train_l,
-                               test_size=0.2,
-                               random_state=1)  # This generates the validation data
+    #(train_f,
+    # val_f,
+    # train_l,
+    # val_l) = train_test_split(train_f,
+    #                           train_l,
+    #                           test_size=0.2,
+    #                           random_state=1)  # This generates the validation data
 
     #moments_train = check_moments(train_f, train_l)
 
-    train_f_path = os.path.join(save_path, 'train_f.pk')
-    train_l_path = os.path.join(save_path, 'train_l.pk')
+    #train_f_path = os.path.join(save_path, 'train_f.pk')
+    #train_l_path = os.path.join(save_path, 'train_l.pk')
 
-    test_f_path = os.path.join(save_path, 'test_f.pk')
-    test_l_path = os.path.join(save_path, 'test_l.pk')
+    #test_f_path = os.path.join(save_path, 'test_f.pk')
+    #test_l_path = os.path.join(save_path, 'test_l.pk')
 
-    val_f_path = os.path.join(save_path, 'val_f.pk')
-    val_l_path = os.path.join(save_path, 'val_l.pk')
+    #val_f_path = os.path.join(save_path, 'val_f.pk')
+    #val_l_path = os.path.join(save_path, 'val_l.pk')
 
-    train_index_path = os.path.join(save_path, 'train_index.pk')
-    test_index_path = os.path.join(save_path, 'test_index.pk')
+    #train_index_path = os.path.join(save_path, 'train_index.pk')
+    #test_index_path = os.path.join(save_path, 'test_index.pk')
 
-    save(train_f_path, train_f,
-         train_l_path, train_l,
-         test_f_path, test_f,
-         test_l_path, test_l,
-         val_f_path, val_f,
-         val_l_path, val_l,
-         train_index_path, train_index,
-         test_index_path, test_index)
+    #save(train_f_path, train_f,
+    #     train_l_path, train_l,
+    #     test_f_path, test_f,
+    #     test_l_path, test_l,
+    #     val_f_path, val_f,
+    #     val_l_path, val_l,
+    #     train_index_path, train_index,
+    #     test_index_path, test_index)
 
 
 if __name__ == '__main__':
     # This routine doesn't use h, it normalises the distance and wrt the maximum distance of the neighbours
     data_path         = './fortran_parallel_data'
-    data_path         = './blue_noise'
-    data_iteration    = 1
+    #data_path         = './blue_noise'
+    data_path = './lucas'
+    data_iteration    = 8
     n_cores           = 4
     derivative        = 'x'
-    load_weights      = False
-    parallel          = True
+    load_weights      = True
+    parallel          = False
     root              = 'preproc_data_no_w'
     data_augmentation = False
     max_neighbours    = 25
