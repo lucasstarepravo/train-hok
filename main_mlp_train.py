@@ -13,7 +13,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau, LinearLR
 from Plots import plot_training_pytorch
 from data_processing.gnn_preproc import load
 from models.labfm_moments import calc_moments_torch_mlp, monomial_power
-from data_processing.mlp_loader import MLPDataset
+from data_processing.mlp_loader import MLPDataset, LinDataset
 from torch.utils.data import DataLoader
 from scipy.special import factorial
 from torch_geometric.nn.aggr import SumAggregation
@@ -45,9 +45,15 @@ def construct_mlp_data_loader(cpu_cores: int,
     #print(weights.shape)
     #print(distances.shape)
 
-    test_ds  = MLPDataset(features=distances[test_idx], labels=weights[test_idx])
-    val_ds   = MLPDataset(features=distances[val_idx], labels=weights[val_idx])
-    train_ds = MLPDataset(features=distances[train_idx], labels=weights[train_idx])
+    if lin_sys:
+       test_ds = LinDataset(features=amat[test_idx], labels=psi[test_idx])
+       val_ds  = LinDataset(features=amat[val_idx], labels=psi[val_idx])
+       train_ds = LinDataset(features=amat[train_idx], labels=psi[train_idx])
+    else:
+
+       test_ds  = MLPDataset(features=distances[test_idx], labels=weights[test_idx])
+       val_ds   = MLPDataset(features=distances[val_idx], labels=weights[val_idx])
+       train_ds = MLPDataset(features=distances[train_idx], labels=weights[train_idx])
 
 
     logger.info('Creating data loader')
@@ -161,24 +167,13 @@ def train_model(model_id: int,
         #                             output_size=output_size,
         #                             embedding_size=embedding_size,
         #                            layers=layers).to(device)
-        model = nn.Sequential(
-            nn.Linear(input_size, neurons),
-            nn.LayerNorm(neurons),
-            nn.SiLU(),
-            nn.Linear(neurons, neurons),
-            nn.LayerNorm(neurons),
-            nn.SiLU(),
-            nn.Linear(neurons, neurons),
-            nn.LayerNorm(neurons),
-            nn.SiLU(),
-            nn.Linear(neurons, neurons),
-            nn.LayerNorm(neurons),
-            nn.SiLU(),
-            nn.Linear(neurons, neurons),
-            nn.LayerNorm(neurons),
-            nn.SiLU(),
-            nn.Linear(neurons, input_size // 2)
-        ).to(device)
+        model = nn.Sequential(nn.Linear(input_size, neurons), nn.LayerNorm(neurons), nn.SiLU())
+
+        for i in range(layers):
+            model.extend(nn.Sequential(nn.Linear(neurons, neurons), nn.LayerNorm(neurons), nn.SiLU()))
+
+        model.append(nn.Linear(neurons, output_size))
+        model.to(device)
 
         #not_decay = [p for name, p in model.named_parameters() if 'linear' not in name]
         #decay = [p for name, p in model.named_parameters() if 'linear' in name]
@@ -200,8 +195,8 @@ def train_model(model_id: int,
     plateau_scheduler = ReduceLROnPlateau(optimizer=optimizer,
                                           patience=8,
                                           factor=0.4,
-                                          cooldown=6,
-                                          eps=1e-12)
+                                          cooldown=15,
+                                          eps=1e-8)
 
     def closure():
         optimizer.zero_grad()
@@ -283,7 +278,7 @@ def train_model(model_id: int,
             total_loss += loss.detach()
             #total_loss += loss.detach()
 
-
+        print('GOT HERE')
         train_loss = total_loss / (num_batches + 1)
 
 
@@ -377,21 +372,20 @@ if __name__=='__main__':
     # to isolate the host and the cores used for dataloader run the code with
     # numactl -C 4-7 --localalloc python3 main_train_gpu.py
     cpu_cores   = 4                                        # number of cpu cores to load data for gpu
-    batch_size  = 2**11                                      #
+    batch_size  = 2**10                                      #
     prefetch_factor = 5                                    # number of batches for cpu to prefetch
-    model_id    = 81                                      # id of the model to save
-    epochs      = 2000                                      # total of number of epochs to run
+    model_id    = 89                                      # id of the model to save
+    epochs      = 1500                                      # total of number of epochs to run
     lr          = 1e-3                                   # learning rate
     input_size  = 60 - 2                                        # 2 dimensional input
-    output_size = 1                                        # number of kernels
-    layers      = 2                                        # num of gnn layers
-    embedding_size = 128                                    # embedding size
+    output_size = input_size // 2                                        # number of kernels
+    layers      = 5                                        # num of gnn layers
+    embedding_size = 64                                    # embedding size
     data_iteration = 8                                     # which original data iteration to use
     checkpoint_p_epoch = 500                                # every how many epochs to save checkpoint
     approximation_order = 2                                # order of approximation for loss moments
-    neurons = 128
-    continue_train_model = ''                              # set to checked model full path to resume training # saved_models/checkpoint/attrs14_epoch580.pth saved_models/checkpoint/attrs23_epoch25.pth
-                                                           # leave string above empty if new model is being trained
+    neurons = 64
+    continue_train_model = ''    #  ve string above empty if new model is being trained
     load_weights       = False                             # set to true if data has weights
     derivative         = 'x'                               # the differential operator the gnn will learn ('x', 'y', 'laplace', or 'hyp')
     base_model_path    = 'saved_models'                    # root dir to save models and checkpoints
@@ -402,6 +396,9 @@ if __name__=='__main__':
     mem_or_disk        = 'disk'                            # dataset to be placed on RAM or disk (either 'mem' or 'disk')
     data_augmentation  = True                              # does 180-degree rotation in stencils
     dense_graph        = False                             # if all graph nodes are connected to each other or only to central node
+    lin_sys            = True
+    input_size = 25 if lin_sys else input_size
+    output_size = 5 if lin_sys else output_size
 
     train = True                                         # set train=False and plot=True to only visualise training loss
     plot  = True
@@ -416,6 +413,10 @@ if __name__=='__main__':
         test_idx = load(os.path.join(f_path, 'test_idx.pk'))
         weights = load(os.path.join(f_path, 'weights.pk'))
         h = load(os.path.join(f_path, 'h.pk'))
+        amat = load(os.path.join(f_path, 'amat.pk'))
+        psi = load(os.path.join(f_path, 'psi.pk'))
+
+
 
         (test_loader,
          val_loader,

@@ -151,7 +151,6 @@ def non_dimension(features, labels, h, dtype='laplace', load_weights=True):
     if load_weights:
         stand_label = labels * h_scale_w
 
-
     return stand_feature, stand_label, h_scale_xy, h_scale_w
 
 ########### Below functions to load and extract data from raw files ###########

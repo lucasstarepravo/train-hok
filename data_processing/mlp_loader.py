@@ -2,6 +2,17 @@ from torch.utils.data import Dataset
 import torch
 
 
+class LinDataset(Dataset):
+    def __init__(self, features, labels):
+        self.x = torch.tensor(features, dtype=torch.float32)
+        self.y = torch.tensor(labels, dtype=torch.float32)
+
+    def __len__(self):
+        return self.x.shape[0]
+
+    def __getitem__(self, idx):
+        return self.x[idx,:], self.y[idx, :]
+
 class MLPDataset(Dataset):
     def __init__(self,
                  features,

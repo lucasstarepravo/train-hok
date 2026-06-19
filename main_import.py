@@ -171,6 +171,7 @@ def import_and_process_data(data_path: str,
     #moments = check_moments(features, weights)
     #print(moments)
 
+
     (distances,
      weights,
      h_xy,
@@ -178,6 +179,7 @@ def import_and_process_data(data_path: str,
                           weights,
                           h,
                           dtype=derivative)
+
 
     h_xy_path = os.path.join(save_path, 'h_xy.pk')
     h_w_path  = os.path.join(save_path, 'h_w.pk')
@@ -208,13 +210,27 @@ def import_and_process_data(data_path: str,
     distances_dir = os.path.join(save_path, 'distances.pk')
     weights_dir = os.path.join(save_path, 'weights.pk')
     h_dir = os.path.join(save_path, 'h.pk')
+    amat_dir = os.path.join(save_path, 'amat.pk')
+    psi_dir = os.path.join(save_path, 'psi.pk')
+
+    #print(amat.shape)
+    #print('amat', np.max(amat), np.min(amat))
+    print('psi_b', np.max(psi), np.min(psi))
+    psi = psi * h
+    if derivative == 'laplace': psi = psi * h
+    print('psi_a', np.max(psi), np.min(psi))
+    if derivative == 'laplace': psi * h
+    print('psi_aa', np.max(psi), np.min(psi))
+    #print(h)
 
     save(train_idx_dir, train_idx,
          val_idx_dir, val_idx,
          test_idx_dir, test_idx,
          distances_dir, distances,
          weights_dir, weights,
-         h_dir, h)
+         h_dir, h,
+         amat_dir, amat,
+         psi_dir, psi)
 
 
     #(train_f,
@@ -266,14 +282,14 @@ if __name__ == '__main__':
     data_path         = './fortran_parallel_data'
     #data_path         = './blue_noise'
     data_path = './lucas'
-    data_iteration    = 8
+    data_iteration    = 3
     n_cores           = 4
     derivative        = 'x'
     load_weights      = True
     parallel          = False
-    root              = 'preproc_data_no_w'
+    root              = 'preproc_data_no_w_l'
     data_augmentation = False
-    max_neighbours    = 25
+    max_neighbours    = 35
     plot_stencil      = False
 
     test_root  = os.path.join(root, 'test_graphs')
@@ -302,6 +318,7 @@ if __name__ == '__main__':
 
         else:
             save_path = os.path.join('./preproc_data', f'iter{data_iteration}')
+            os.makedirs(save_path, exist_ok=True)
             import_and_process_data(data_path=data_path,
                                     data_iteration=data_iteration,
                                     save_path=save_path,
